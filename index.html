@@ -376,6 +376,47 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
     </div>
     <button class="order-btn" id="orderBtn" disabled onclick="placeOrder()">Order This →</button>
     <div class="note">You'll be taken to our store to complete your order. Custom requests are confirmed by Outpost team within 24 hrs.</div>
+
+    <!-- Inquiry section -->
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px;">
+      <div style="font-size:0.82rem;color:var(--muted);text-align:center;margin-bottom:12px;">
+        Don't see what you're looking for?<br>
+        <a href="tel:+12506xxx" id="inquiryPhone"
+          style="color:var(--accent2);font-weight:600;font-size:0.9rem;text-decoration:none;">
+          📞 Call or text us
+        </a>
+      </div>
+      <div id="inquiryFormWrap">
+        <button onclick="toggleInquiryForm()" id="inquiryToggleBtn"
+          style="width:100%;padding:10px;background:transparent;border:1.5px solid var(--accent2);
+          color:var(--accent2);border-radius:8px;font-size:0.85rem;font-family:inherit;
+          font-weight:600;cursor:pointer;transition:background 0.15s;">
+          Send Us a Message ✉️
+        </button>
+        <div id="inquiryForm" hidden style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+          <input id="iqName" type="text" placeholder="Your name" autocomplete="name"
+            style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+            background:var(--surface2);color:var(--fg);font-size:0.85rem;font-family:inherit;width:100%;">
+          <input id="iqContact" type="text" placeholder="Phone or email"
+            autocomplete="tel email"
+            style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+            background:var(--surface2);color:var(--fg);font-size:0.85rem;font-family:inherit;width:100%;">
+          <textarea id="iqMessage" rows="3" placeholder="What are you looking for?"
+            style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+            background:var(--surface2);color:var(--fg);font-size:0.85rem;font-family:inherit;
+            width:100%;resize:vertical;"></textarea>
+          <button onclick="submitInquiry()"
+            style="padding:10px;background:var(--accent);color:white;border:none;
+            border-radius:8px;font-size:0.85rem;font-family:inherit;font-weight:600;cursor:pointer;">
+            Send Inquiry →
+          </button>
+          <div id="iqThanks" hidden
+            style="text-align:center;font-size:0.82rem;color:var(--accent2);padding:8px;">
+            ✅ Thanks! We'll be in touch soon.
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 <!-- Preview zoom modal -->
 <div id="zoomModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:1000;
@@ -801,6 +842,50 @@ function updateSummary(d,g,c){
 function updateBtn(){
   const hasLogo = state.design || state.uploadedLogoSrc || Object.keys(state.zones).length > 0;
   orderBtn.disabled = !(hasLogo && state.garment && state.colour);
+}
+
+function toggleInquiryForm(){
+  const form = document.getElementById('inquiryForm');
+  const btn  = document.getElementById('inquiryToggleBtn');
+  const open = form.hidden;
+  form.hidden = !open;
+  form.style.display = open ? 'flex' : 'none';
+  btn.textContent = open ? 'Cancel ✕' : 'Send Us a Message ✉️';
+}
+
+function submitInquiry(){
+  const name    = document.getElementById('iqName').value.trim();
+  const contact = document.getElementById('iqContact').value.trim();
+  const message = document.getElementById('iqMessage').value.trim();
+  if(!name || !contact || !message){
+    alert('Please fill in all fields before sending.');
+    return;
+  }
+  // Build a summary of the current configuration to include with the inquiry
+  const g = GARMENTS.find(x=>x.id===state.garment);
+  const c = COLOURS.find(x=>x.id===state.colour);
+  const configSummary = (g && c) ? ` (Looking at: ${c.name} ${g.name})` : '';
+
+  // Store locally so staff can see it (temporary — hook up to backend/Square later)
+  const inquiries = JSON.parse(localStorage.getItem('oo_inquiries')||'[]');
+  inquiries.push({
+    name, contact, message,
+    config: configSummary,
+    ts: new Date().toISOString()
+  });
+  try{ localStorage.setItem('oo_inquiries', JSON.stringify(inquiries)); }catch(e){}
+
+  // Show thanks, hide form inputs
+  document.getElementById('iqThanks').hidden = false;
+  document.getElementById('iqName').value = '';
+  document.getElementById('iqContact').value = '';
+  document.getElementById('iqMessage').value = '';
+  document.getElementById('inquiryToggleBtn').textContent = 'Send Us a Message ✉️';
+  setTimeout(()=>{
+    document.getElementById('inquiryForm').hidden = true;
+    document.getElementById('inquiryForm').style.display = 'none';
+    document.getElementById('iqThanks').hidden = true;
+  }, 3000);
 }
 
 function placeOrder(){
