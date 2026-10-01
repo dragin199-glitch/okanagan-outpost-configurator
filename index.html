@@ -77,7 +77,9 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
   cursor:grab;touch-action:none;}
 #designOverlay:active{cursor:grabbing;}
 /* Zone overlays are created dynamically — shared base style */
-.zone-overlay{position:absolute;object-fit:contain;pointer-events:none;-webkit-user-drag:none;}
+.zone-overlay{position:absolute;object-fit:contain;-webkit-user-drag:none;cursor:grab;touch-action:none;}
+.zone-overlay:active{cursor:grabbing;}
+.zone-overlay.zone-selected{outline:2px dashed var(--accent2);outline-offset:2px;}
 /* Drag handle hint */
 #dragHint{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
   background:rgba(0,0,0,0.55);color:#fff;font-size:0.62rem;padding:2px 8px;border-radius:10px;
@@ -407,6 +409,9 @@ function getZoneEl(key){
     const watermark = document.getElementById('watermark');
     wrap.insertBefore(img, watermark);
     _zoneEls[key] = img;
+    // attachZoneDrag is defined later in the script but called at runtime (after parse), so it's safe
+    _zoneEls[key] = img; // store first so attachZoneDrag can reference it
+    attachZoneDrag(img, key);
   }
   return _zoneEls[key];
 }
@@ -652,7 +657,11 @@ function renderPreview(){
       el.src = src;
       el.style.display = 'block';
       el.style.filter = 'none';
-      applyOverlayPos(el, lf, tf, wf, hf, w, h, rot, 0, 0, 1.0);
+      const zdx = (zone.offset && zone.offset.x) || 0;
+      const zdy = (zone.offset && zone.offset.y) || 0;
+      const zsc = zone.scale || 1.0;
+      applyOverlayPos(el, lf, tf, wf, hf, w, h, rot, zdx, zdy, zsc);
+      el.classList.toggle('zone-selected', zKey === selectedPlacement);
     });
 
     // Show sleeve indicators when those zones are active
@@ -1087,7 +1096,7 @@ function selectPlacement(btn){ selectZone(btn); }
 function selectZone(btn){
   selectedPlacement = btn.dataset.place;
   state.customPlacement = selectedPlacement;
-  state.logoOffset = {x:0, y:0};
+  // Don't reset logoOffset — that belongs to the main chest logo, not zones
   document.querySelectorAll('.placement-btn').forEach(x=>x.classList.remove('selected'));
   btn.classList.add('selected');
   const isSleeve = selectedPlacement === 'left_sleeve' || selectedPlacement === 'right_sleeve';
@@ -1129,7 +1138,8 @@ function applyZoneText(){
   const cObj = COLOURS.find(c=>c.id===state.colour);
   const isDark = cObj ? cObj.dark : false;
   const src = renderTextToCanvas(txt, tagline||null, selectedFont, isDark);
-  state.zones[selectedPlacement] = {type:'text', src, text: txt + (tagline ? '\n'+tagline : '')};
+  const existing = state.zones[selectedPlacement];
+  state.zones[selectedPlacement] = {type:'text', src, text: txt + (tagline ? '\n'+tagline : ''), offset: existing ? existing.offset : {x:0,y:0}, scale: existing ? existing.scale : 1.0};
   renderPreview();
 }
 
@@ -1169,7 +1179,8 @@ function clearZoneLogo(){
       const designSrc = e.dataTransfer.getData('text/design-src');
       if(designId && designSrc){
         const d = DESIGNS.find(x=>x.id===designId);
-        state.zones[selectedPlacement] = {type:'logo', src:designSrc, name: d ? d.name : designId};
+        const _ex1 = state.zones[selectedPlacement];
+        state.zones[selectedPlacement] = {type:'logo', src:designSrc, name: d ? d.name : designId, offset: _ex1 ? _ex1.offset : {x:0,y:0}, scale: _ex1 ? _ex1.scale : 1.0};
         const thumb = document.getElementById('zoneUploadThumb');
         const prevRow = document.getElementById('zoneUploadPreviewRow');
         const nameEl = document.getElementById('zoneUploadName');
@@ -1188,7 +1199,8 @@ function clearZoneLogo(){
     const reader = new FileReader();
     reader.onload = ev => {
       const src = ev.target.result;
-      state.zones[selectedPlacement] = {type:'logo', src, name: file.name};
+      const _ex2 = state.zones[selectedPlacement];
+      state.zones[selectedPlacement] = {type:'logo', src, name: file.name, offset: _ex2 ? _ex2.offset : {x:0,y:0}, scale: _ex2 ? _ex2.scale : 1.0};
       const thumb = document.getElementById('zoneUploadThumb');
       const prevRow = document.getElementById('zoneUploadPreviewRow');
       const nameEl = document.getElementById('zoneUploadName');
@@ -1214,8 +1226,9 @@ const TEXT_PLACEMENT = {
   // CSS height = 0.26×300 = 78px, half = 39px.
   // Left:  lf=0.12 → left=36, center_x=36+0.07×300=36+21=57, 57-39=18px clear ✓
   // Right: lf=0.74 → left=222, center_x=222+21=243, 300-243-39=18px clear ✓
-  left_sleeve: {pos: [0.12, 0.28, 0.14, 0.26], rotate: -90},
-  right_sleeve:{pos: [0.74, 0.28, 0.14, 0.26], rotate:  90},
+  // Sleeve: wider CSS height so rotated text fills more of the arm
+  left_sleeve: {pos: [0.10, 0.22, 0.20, 0.40], rotate: -90},
+  right_sleeve:{pos: [0.70, 0.22, 0.20, 0.40], rotate:  90},
 };
 
 function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment){
@@ -1266,18 +1279,18 @@ logoScaleSlider.addEventListener('input', () => {
 });
 
 // ── Drag to reposition overlay ────────────────────────────────────────────────
-let _drag = null; // {startX, startY, startOX, startOY}
+let _drag = null; // {startX, startY, startOX, startOY, target: 'main'|zoneKey}
 
 overlay.addEventListener('pointerdown', e => {
   if(e.button && e.button !== 0) return;
   e.preventDefault();
   overlay.setPointerCapture(e.pointerId);
-  _drag = {startX: e.clientX, startY: e.clientY, startOX: state.logoOffset.x, startOY: state.logoOffset.y};
+  _drag = {startX: e.clientX, startY: e.clientY, startOX: state.logoOffset.x, startOY: state.logoOffset.y, target: 'main'};
   overlay.style.cursor = 'grabbing';
 });
 
 overlay.addEventListener('pointermove', e => {
-  if(!_drag) return;
+  if(!_drag || _drag.target !== 'main') return;
   state.logoOffset.x = _drag.startOX + (e.clientX - _drag.startX);
   state.logoOffset.y = _drag.startOY + (e.clientY - _drag.startY);
   renderPreview();
@@ -1292,6 +1305,42 @@ overlay.addEventListener('pointercancel', () => {
   _drag = null;
   overlay.style.cursor = 'grab';
 });
+
+// Zone overlay drag — attached dynamically when zone element is created
+function attachZoneDrag(el, zoneKey){
+  el.addEventListener('pointerdown', e => {
+    if(e.button && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    el.setPointerCapture(e.pointerId);
+    const zone = state.zones[zoneKey];
+    if(!zone) return;
+    if(!zone.offset) zone.offset = {x:0, y:0};
+    _drag = {startX: e.clientX, startY: e.clientY, startOX: zone.offset.x, startOY: zone.offset.y, target: zoneKey};
+    el.style.cursor = 'grabbing';
+    // Select this zone in the UI
+    selectedPlacement = zoneKey;
+    document.querySelectorAll('.placement-btn').forEach(b => b.classList.toggle('selected', b.dataset.place === zoneKey));
+    renderPreview();
+  });
+  el.addEventListener('pointermove', e => {
+    if(!_drag || _drag.target !== zoneKey) return;
+    const zone = state.zones[zoneKey];
+    if(!zone) return;
+    if(!zone.offset) zone.offset = {x:0, y:0};
+    zone.offset.x = _drag.startOX + (e.clientX - _drag.startX);
+    zone.offset.y = _drag.startOY + (e.clientY - _drag.startY);
+    renderPreview();
+  });
+  el.addEventListener('pointerup', () => {
+    if(_drag && _drag.target === zoneKey) _drag = null;
+    el.style.cursor = 'grab';
+  });
+  el.addEventListener('pointercancel', () => {
+    if(_drag && _drag.target === zoneKey) _drag = null;
+    el.style.cursor = 'grab';
+  });
+}
 
 // ── Zoom modal ────────────────────────────────────────────────────────────────
 const zoomModal = document.getElementById('zoomModal');
