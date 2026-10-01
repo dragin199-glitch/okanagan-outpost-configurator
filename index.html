@@ -1229,9 +1229,14 @@ taglineInput.addEventListener('input', liveUpdateFontPreviews);
 
 function selectPlacement(btn){ selectZone(btn); }
 
+function sleeveDefaultRot(placement){
+  const pl = TEXT_PLACEMENT[placement];
+  return (pl && pl.rotate !== undefined) ? pl.rotate : (placement === 'left_sleeve' ? -78 : 78);
+}
+
 function setSleeveFlip(flipped){
   const zone = state.zones[selectedPlacement];
-  const defaultRot = selectedPlacement === 'left_sleeve' ? -90 : 90;
+  const defaultRot = sleeveDefaultRot(selectedPlacement);
   const newRot = flipped ? defaultRot + 180 : defaultRot;
   if(zone) zone.rotation = newRot;
   else {
@@ -1251,7 +1256,7 @@ function syncSleeveFlipUI(){
   if(isSleeve){
     flipRow.style.display = 'flex';
     const zone = state.zones[selectedPlacement];
-    const defaultRot = selectedPlacement === 'left_sleeve' ? -90 : 90;
+    const defaultRot = sleeveDefaultRot(selectedPlacement);
     const storedRot = zone ? zone.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement]);
     const currentRot = (storedRot !== undefined) ? storedRot : defaultRot;
     const isFlipped = Math.abs(currentRot - defaultRot) > 90;
@@ -1310,7 +1315,7 @@ function applyZoneText(){
   const isSleeve = selectedPlacement === 'left_sleeve' || selectedPlacement === 'right_sleeve';
   const src = renderTextToCanvas(txt, tagline||null, selectedFont, isDark, isSleeve);
   const existing = state.zones[selectedPlacement];
-  const defaultRot = selectedPlacement === 'left_sleeve' ? -90 : selectedPlacement === 'right_sleeve' ? 90 : 0;
+  const defaultRot = (selectedPlacement === 'left_sleeve' || selectedPlacement === 'right_sleeve') ? sleeveDefaultRot(selectedPlacement) : 0;
   const storedRot = existing ? existing.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement]);
   state.zones[selectedPlacement] = {type:'text', src, text: txt + (tagline ? '\n'+tagline : ''), offset: existing ? existing.offset : {x:0,y:0}, scale: existing ? existing.scale : 1.0, rotation: (storedRot !== undefined) ? storedRot : defaultRot};
   renderPreview();
@@ -1353,7 +1358,7 @@ function clearZoneLogo(){
       if(designId && designSrc){
         const d = DESIGNS.find(x=>x.id===designId);
         const _ex1 = state.zones[selectedPlacement];
-        const _defRot1 = selectedPlacement==='left_sleeve'?-90:selectedPlacement==='right_sleeve'?90:0;
+        const _defRot1 = (selectedPlacement==='left_sleeve'||selectedPlacement==='right_sleeve')?sleeveDefaultRot(selectedPlacement):0;
         const _rot1 = _ex1 ? _ex1.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement] !== undefined ? state._zoneRotations[selectedPlacement] : _defRot1);
         state.zones[selectedPlacement] = {type:'logo', src:designSrc, name: d ? d.name : designId, offset: _ex1 ? _ex1.offset : {x:0,y:0}, scale: _ex1 ? _ex1.scale : 1.0, rotation: _rot1};
         const thumb = document.getElementById('zoneUploadThumb');
@@ -1375,7 +1380,7 @@ function clearZoneLogo(){
     reader.onload = ev => {
       const src = ev.target.result;
       const _ex2 = state.zones[selectedPlacement];
-      const _defRot2 = selectedPlacement==='left_sleeve'?-90:selectedPlacement==='right_sleeve'?90:0;
+      const _defRot2 = (selectedPlacement==='left_sleeve'||selectedPlacement==='right_sleeve')?sleeveDefaultRot(selectedPlacement):0;
       const _rot2 = _ex2 ? _ex2.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement] !== undefined ? state._zoneRotations[selectedPlacement] : _defRot2);
       state.zones[selectedPlacement] = {type:'logo', src, name: file.name, offset: _ex2 ? _ex2.offset : {x:0,y:0}, scale: _ex2 ? _ex2.scale : 1.0, rotation: _rot2};
       const thumb = document.getElementById('zoneUploadThumb');
