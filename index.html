@@ -91,6 +91,39 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 .order-btn:disabled{background:var(--border);color:var(--muted);cursor:default;}
 .note{font-size:0.74rem;color:var(--muted);text-align:center;line-height:1.5;padding:0 4px;}
 #garmentImg{display:block;width:100%;height:auto;border-radius:8px;-webkit-user-drag:none;pointer-events:none;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.22));}
+/* ── Step 4: Custom logo upload ── */
+.step-custom .step-header{background:linear-gradient(135deg,var(--surface2) 0%,var(--sel-bg) 100%);}
+.step-num-opt{background:var(--accent2) !important;font-size:0.9rem !important;}
+.step-sub{font-size:0.72rem;color:var(--muted);margin-top:1px;}
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:22px 16px;
+  text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s;}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent2);background:var(--sel-bg);}
+.upload-icon{font-size:1.6rem;margin-bottom:6px;opacity:0.6;}
+.upload-label{font-size:0.85rem;color:var(--fg);}
+.upload-link{color:var(--accent2);text-decoration:underline;cursor:pointer;}
+.upload-hint{font-size:0.72rem;color:var(--muted);margin-top:4px;}
+.upload-divider{display:flex;align-items:center;gap:10px;color:var(--muted);
+  font-size:0.75rem;margin:14px 0;}
+.upload-divider::before,.upload-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+.upload-text-row{display:flex;gap:8px;}
+.company-input{flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;
+  background:var(--surface);color:var(--fg);font-family:inherit;font-size:0.85rem;}
+.company-input:focus{outline:none;border-color:var(--accent2);}
+.text-apply-btn{padding:8px 14px;background:var(--accent);color:white;border:none;
+  border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:inherit;white-space:nowrap;}
+.text-apply-btn:hover{background:var(--accent2);}
+.upload-note{font-size:0.7rem;color:var(--muted);margin-top:10px;line-height:1.4;}
+#uploadPreviewRow{display:flex;align-items:center;gap:12px;padding:10px;
+  background:var(--surface2);border-radius:8px;margin-top:4px;}
+.upload-thumb{width:64px;height:64px;object-fit:contain;border-radius:6px;
+  background:#fff;padding:4px;flex-shrink:0;border:1px solid var(--border);}
+.upload-info{flex:1;min-width:0;}
+.upload-filename{font-size:0.78rem;color:var(--fg);font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.upload-clear{margin-top:6px;background:none;border:1px solid var(--border);
+  color:var(--muted);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:0.75rem;
+  font-family:inherit;}
+.upload-clear:hover{border-color:var(--accent2);color:var(--accent2);}
 </style>
 <div class="header">
   <div>
@@ -115,6 +148,36 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
       <div class="step-body">
         <div class="colour-grid" id="colourGrid"></div>
         <div class="colour-label" id="colourLabel">Select a colour above</div>
+      </div>
+    </div>
+    <div class="step step-custom">
+      <div class="step-header">
+        <div class="step-num step-num-opt">✦</div>
+        <div>
+          <h2>Have Your Own Logo?</h2>
+          <div class="step-sub">Upload it and see it on your chosen garment</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <div id="uploadZone" class="upload-zone">
+          <input type="file" id="logoUpload" accept="image/*" style="display:none;">
+          <div class="upload-icon">⬆</div>
+          <div class="upload-label">Drop your logo here or <span class="upload-link">browse</span></div>
+          <div class="upload-hint">PNG with transparent background works best · JPG also accepted</div>
+        </div>
+        <div id="uploadPreviewRow" style="display:none;">
+          <img id="uploadThumb" class="upload-thumb" src="" alt="Your logo">
+          <div class="upload-info">
+            <div id="uploadName" class="upload-filename"></div>
+            <button class="upload-clear" onclick="clearCustomLogo()">✕ Remove</button>
+          </div>
+        </div>
+        <div class="upload-divider"><span>or</span></div>
+        <div class="upload-text-row">
+          <input type="text" id="companyName" class="company-input" placeholder="Type your company or team name…" maxlength="40">
+          <button class="text-apply-btn" onclick="applyTextLogo()">Preview</button>
+        </div>
+        <div class="upload-note">Your artwork stays on your device — it's never uploaded to our servers.</div>
       </div>
     </div>
   </div>
@@ -154,7 +217,7 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('dragstart',   e => e.preventDefault());
 
 // ── STATE ──
-let state = {design:null,garment:null,colour:null};
+let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null};
 
 const designGrid  = document.getElementById('designGrid');
 const garmentGrid = document.getElementById('garmentGrid');
@@ -303,14 +366,17 @@ function renderPreview(){
   garmentImg.style.display = 'block';
   noGarment.style.display = 'none';
 
+  // Determine which logo src to show: custom upload takes priority over preset design
+  const logoSrc = state.customLogo || (dObj ? dObj.src : null);
+
   // Wait for image to load to position overlay correctly
-  if(dObj){
+  if(logoSrc){
     const positionOverlay = () => {
       const w = garmentImg.offsetWidth  || garmentImg.naturalWidth  || 600;
       const h = garmentImg.offsetHeight || garmentImg.naturalHeight || 600;
       const shape = gObj ? gObj.id : 'pullover_hoodie';
       const [lf, tf, wf, hf] = CHEST_POS[shape] || CHEST_POS.pullover_hoodie;
-      overlay.src = dObj.src;
+      overlay.src = logoSrc;
       overlay.style.display = 'block';
       overlay.style.left   = (lf * w) + 'px';
       overlay.style.top    = (tf * h) + 'px';
@@ -332,20 +398,35 @@ function renderPreview(){
 function updateSummary(d,g,c){
   if(!c){ summary.innerHTML='Pick a design, garment &amp; colour to preview.'; return; }
   let t = '';
-  if(d) t += `<strong>${d.name}</strong> on `;
+  if(state.customLogo){
+    t += `<strong>${state.customLogoName || 'Your Logo'}</strong> <span style="font-size:0.7rem;background:var(--accent2);color:#fff;padding:1px 7px;border-radius:10px;vertical-align:middle;">YOUR LOGO</span> on `;
+  } else if(d) {
+    t += `<strong>${d.name}</strong> on `;
+  }
   t += `<strong>${c.name}`;
   if(g) t += ` ${g.name}`;
   t += '</strong>';
   summary.innerHTML = t;
 }
 
-function updateBtn(){ orderBtn.disabled = !(state.design && state.garment && state.colour); }
+function updateBtn(){
+  const hasLogo = state.design || state.customLogo;
+  orderBtn.disabled = !(hasLogo && state.garment && state.colour);
+}
 
 function placeOrder(){
-  const d = DESIGNS.find(x=>x.id===state.design);
   const g = GARMENTS.find(x=>x.id===state.garment);
   const c = COLOURS.find(x=>x.id===state.colour);
-  const msg = encodeURIComponent(`Custom order: ${d.name} on ${c.name} ${g.name}`);
+  let logoDesc;
+  if(state.customLogo){
+    logoDesc = state.customText
+      ? `Text logo: "${state.customText}"`
+      : `Custom logo upload: ${state.customLogoName || 'uploaded file'}`;
+  } else {
+    const d = DESIGNS.find(x=>x.id===state.design);
+    logoDesc = d ? d.name : 'No design';
+  }
+  const msg = encodeURIComponent(`Custom order: ${logoDesc} on ${c.name} ${g.name}`);
   window.open(`https://okanagan-outpost.square.site?note=${msg}`, '_blank');
 }
 
@@ -353,4 +434,93 @@ window.addEventListener('resize', () => {
   if(state.garment && state.colour) renderPreview();
 });
 renderPreview();
+
+// ── Custom Logo Upload ──
+const uploadZone   = document.getElementById('uploadZone');
+const logoUpload   = document.getElementById('logoUpload');
+const uploadPrevRow= document.getElementById('uploadPreviewRow');
+const uploadThumb  = document.getElementById('uploadThumb');
+const uploadNameEl = document.getElementById('uploadName');
+const companyInput = document.getElementById('companyName');
+
+// Click zone → open file picker
+uploadZone.addEventListener('click', () => logoUpload.click());
+document.querySelector('.upload-link').addEventListener('click', e => { e.stopPropagation(); logoUpload.click(); });
+
+// Drag-and-drop
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if(file && file.type.startsWith('image/')) loadCustomLogo(file);
+});
+
+logoUpload.addEventListener('change', () => {
+  if(logoUpload.files[0]) loadCustomLogo(logoUpload.files[0]);
+});
+
+function loadCustomLogo(file){
+  const reader = new FileReader();
+  reader.onload = e => {
+    state.customLogo = e.target.result;
+    state.customLogoName = file.name.replace(/\.[^.]+$/, '');
+    state.design = null; // deselect preset designs
+    state.customText = null;
+    // clear design selection UI
+    document.querySelectorAll('.design-thumb').forEach(x => x.classList.remove('selected'));
+    // show preview row
+    uploadThumb.src = e.target.result;
+    uploadNameEl.textContent = state.customLogoName;
+    uploadPrevRow.style.display = 'flex';
+    uploadZone.style.display = 'none';
+    companyInput.value = '';
+    renderPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearCustomLogo(){
+  state.customLogo = null;
+  state.customLogoName = null;
+  state.customText = null;
+  logoUpload.value = '';
+  uploadPrevRow.style.display = 'none';
+  uploadZone.style.display = '';
+  renderPreview();
+}
+
+function applyTextLogo(){
+  const txt = companyInput.value.trim();
+  if(!txt) return;
+  // Render text to a canvas, convert to data URL
+  const canvas = document.createElement('canvas');
+  canvas.width = 400; canvas.height = 160;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,400,160);
+  // Pick font size to fit
+  let fontSize = 60;
+  ctx.font = `bold ${fontSize}px Inter, Arial, sans-serif`;
+  while(ctx.measureText(txt).width > 360 && fontSize > 14) {
+    fontSize -= 2;
+    ctx.font = `bold ${fontSize}px Inter, Arial, sans-serif`;
+  }
+  ctx.fillStyle = '#1a1a1a';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(txt, 200, 80);
+  state.customText = txt;
+  state.customLogo = canvas.toDataURL('image/png');
+  state.customLogoName = txt;
+  state.design = null;
+  document.querySelectorAll('.design-thumb').forEach(x => x.classList.remove('selected'));
+  uploadThumb.src = state.customLogo;
+  uploadNameEl.textContent = txt;
+  uploadPrevRow.style.display = 'flex';
+  uploadZone.style.display = 'none';
+  renderPreview();
+}
+
+companyInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyTextLogo(); });
 </script>
