@@ -407,13 +407,14 @@ function saveState(){
       zones: state.zones,
       _zoneRotations: state._zoneRotations
     };
-    sessionStorage.setItem('oo_state', JSON.stringify(toSave));
+    // Use localStorage so state survives hard-refresh and tab closes
+    localStorage.setItem('oo_state', JSON.stringify(toSave));
   } catch(e){ /* quota exceeded or private mode — ignore */ }
 }
 
 function restoreState(){
   try{
-    const raw = sessionStorage.getItem('oo_state');
+    const raw = localStorage.getItem('oo_state');
     if(!raw) return false;
     const saved = JSON.parse(raw);
     if(saved.garment) state.garment = saved.garment;
@@ -430,6 +431,12 @@ function restoreState(){
     }
     return !!(state.garment && state.colour);
   } catch(e){ return false; }
+}
+
+function applyDefaults(){
+  // Pre-select Hoodie + Sport Grey so the preview is never blank on a fresh visit
+  if(!state.garment) state.garment = 'pullover_hoodie';
+  if(!state.colour)  state.colour  = 'sport_grey';
 }
 
 const designGrid  = document.getElementById('designGrid');
@@ -790,45 +797,48 @@ window.addEventListener('resize', () => {
 
 // ── Restore persisted session state ──────────────────────────────────────────
 (function(){
-  const restored = restoreState();
-  if(restored){
-    // Re-select garment button
-    if(state.garment){
-      document.querySelectorAll('.garment-btn').forEach(btn => {
-        if(btn.dataset.id===state.garment) btn.classList.add('selected');
-      });
-    }
-    // Re-select colour swatch
-    if(state.colour){
-      document.querySelectorAll('.colour-swatch').forEach(el => {
-        if(el.dataset.id===state.colour){
-          el.classList.add('selected');
-          const c = COLOURS.find(x=>x.id===state.colour);
-          if(c) colourLabel.textContent = c.name;
-        }
-      });
-    }
-    // Re-select design thumb
-    if(state.design){
-      document.querySelectorAll('.design-thumb').forEach(el => {
-        if(el.dataset && el.dataset.id===state.design) el.classList.add('selected');
-      });
-    }
-    // Show upload preview row if logo was uploaded
-    if(state.uploadedLogoSrc && typeof uploadPrevRow!=='undefined'){
-      uploadPrevRow.style.display = '';
-      if(typeof uploadZone!=='undefined') uploadZone.style.display = 'none';
-      const prevImg = document.getElementById('uploadPreview');
-      if(prevImg) prevImg.src = state.uploadedLogoSrc;
-      const nameEl = document.getElementById('uploadedFileName');
-      if(nameEl) nameEl.textContent = state.customLogoName || 'Uploaded logo';
-    }
-    // Restore logo scale slider
-    if(typeof logoScaleSlider!=='undefined' && state.logoScale != null){
-      logoScaleSlider.value = Math.round(state.logoScale * 100);
-      if(typeof logoScaleLabel!=='undefined') logoScaleLabel.textContent = logoScaleSlider.value + '%';
-    }
+  restoreState();
+  applyDefaults(); // ensure garment+colour always set (Hoodie + Sport Grey for fresh visits)
+
+  // Always highlight the active garment button
+  if(state.garment){
+    document.querySelectorAll('.garment-btn').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.id===state.garment);
+    });
   }
+  // Always highlight the active colour swatch
+  if(state.colour){
+    document.querySelectorAll('.colour-swatch').forEach(el => {
+      el.classList.toggle('selected', el.dataset.id===state.colour);
+    });
+    const c = COLOURS.find(x=>x.id===state.colour);
+    if(c) colourLabel.textContent = c.name;
+  }
+  // Re-select design thumb (if any saved)
+  if(state.design){
+    document.querySelectorAll('.design-thumb').forEach(el => {
+      if(el.dataset && el.dataset.id===state.design) el.classList.add('selected');
+    });
+  }
+  // Show upload preview row if logo was uploaded (elements declared below — use getElementById)
+  if(state.uploadedLogoSrc){
+    const uRow = document.getElementById('uploadPreviewRow');
+    const uZone = document.getElementById('uploadZone');
+    const uImg  = document.getElementById('uploadPreview');
+    const uName = document.getElementById('uploadName');
+    if(uRow)  uRow.style.display  = '';
+    if(uZone) uZone.style.display = 'none';
+    if(uImg)  uImg.src = state.uploadedLogoSrc;
+    if(uName) uName.textContent = state.customLogoName || 'Uploaded logo';
+  }
+  // Restore logo scale slider
+  const _lss = document.getElementById('logoScaleSlider');
+  const _lsl = document.getElementById('logoScaleLabel');
+  if(_lss && state.logoScale != null){
+    _lss.value = Math.round(state.logoScale * 100);
+    if(_lsl) _lsl.textContent = _lss.value + '%';
+  }
+
   renderPreview();
 })();
 
