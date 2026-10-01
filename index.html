@@ -323,6 +323,14 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
             </div>
           </div>
         </div>
+        <!-- Zone size slider — shown whenever a zone has content -->
+        <div id="zoneSizeRow" style="margin-top:10px;display:none;">
+          <div class="text-field-label" style="display:flex;justify-content:space-between;">
+            <span>Zone size</span><span id="zoneScaleLabel">100%</span>
+          </div>
+          <input type="range" id="zoneScaleSlider" min="20" max="300" value="100" step="5"
+            style="width:100%;accent-color:var(--accent);cursor:pointer;margin-top:4px;">
+        </div>
         <div class="upload-note" style="margin-top:8px;">Tip: each zone is independent — switch zones above to configure multiple locations.</div>
       </div>
     </div>
@@ -725,6 +733,20 @@ function renderPreview(){
       el.classList.toggle('zone-selected', isSelected);
       el.classList.toggle('zone-inactive', !isSelected);
     });
+
+    // Sync zone size slider with active zone's scale
+    const _zsRow = document.getElementById('zoneSizeRow');
+    const _zsSlider = document.getElementById('zoneScaleSlider');
+    const _zsLabel  = document.getElementById('zoneScaleLabel');
+    const _activeZone = state.zones[selectedPlacement];
+    if(_zsRow){
+      _zsRow.style.display = _activeZone ? 'block' : 'none';
+      if(_activeZone && _zsSlider){
+        const pct = Math.round((_activeZone.scale || 1.0) * 100);
+        _zsSlider.value = pct;
+        if(_zsLabel) _zsLabel.textContent = pct + '%';
+      }
+    }
 
     // Show sleeve indicators when those zones are active
     const leftInd = document.getElementById('sleeveLeftIndicator');
@@ -1453,6 +1475,19 @@ taglineInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyZoneT
 logoScaleSlider.addEventListener('input', () => {
   state.logoScale = parseInt(logoScaleSlider.value) / 100;
   logoScaleLabel.textContent = logoScaleSlider.value + '%';
+  renderPreview();
+});
+
+// ── Zone size slider ──────────────────────────────────────────────────────────
+const zoneScaleSlider = document.getElementById('zoneScaleSlider');
+const zoneScaleLabel  = document.getElementById('zoneScaleLabel');
+const zoneSizeRow     = document.getElementById('zoneSizeRow');
+
+zoneScaleSlider.addEventListener('input', () => {
+  const zone = state.zones[selectedPlacement];
+  if(!zone) return;
+  zone.scale = parseInt(zoneScaleSlider.value) / 100;
+  zoneScaleLabel.textContent = zoneScaleSlider.value + '%';
   renderPreview();
 });
 
