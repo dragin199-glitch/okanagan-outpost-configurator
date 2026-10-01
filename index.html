@@ -74,12 +74,14 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 #previewWrap{width:100%;max-width:300px;position:relative;border-radius:12px;overflow:hidden;}
 #previewWrap svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.22));}
 #designOverlay{position:absolute;object-fit:contain;-webkit-user-drag:none;image-rendering:auto;
-  cursor:grab;touch-action:none;}
+  cursor:grab;touch-action:none;z-index:2;}
 #designOverlay:active{cursor:grabbing;}
+#designOverlay.main-inactive{pointer-events:none;} /* when a zone is selected, let clicks fall through */
 /* Zone overlays are created dynamically — shared base style */
-.zone-overlay{position:absolute;object-fit:contain;-webkit-user-drag:none;cursor:grab;touch-action:none;}
+.zone-overlay{position:absolute;object-fit:contain;-webkit-user-drag:none;cursor:grab;touch-action:none;z-index:3;}
 .zone-overlay:active{cursor:grabbing;}
 .zone-overlay.zone-selected{outline:2px dashed var(--accent2);outline-offset:2px;}
+.zone-overlay.zone-inactive{pointer-events:none;z-index:2;} /* non-selected zones don't intercept */
 /* Drag handle hint */
 #dragHint{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
   background:rgba(0,0,0,0.55);color:#fff;font-size:0.62rem;padding:2px 8px;border-radius:10px;
@@ -270,7 +272,13 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
           <button class="placement-btn" data-place="right_sleeve" onclick="selectZone(this)">Right Sleeve ↕</button>
         </div>
         <div id="sleeveNote" hidden style="font-size:0.7rem;color:var(--muted);margin-top:2px;margin-bottom:6px;line-height:1.4;">
-          Sleeve print runs vertically — rotated so it reads wrist to shoulder.
+          Sleeve print runs vertically along the arm.
+        </div>
+        <!-- Flip control — only shown for sleeve zones -->
+        <div id="sleeveFlipRow" hidden style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-size:0.75rem;color:var(--muted);">Read direction:</span>
+          <button class="zone-type-btn selected" id="flipBtnWristUp" onclick="setSleeveFlip(false)">↑ Wrist→Shoulder</button>
+          <button class="zone-type-btn" id="flipBtnShoulderUp" onclick="setSleeveFlip(true)">↓ Shoulder→Wrist</button>
         </div>
         <!-- Toggle: logo or text for this zone -->
         <div style="display:flex;gap:8px;margin:10px 0 8px;">
@@ -660,8 +668,12 @@ function renderPreview(){
       const zdx = (zone.offset && zone.offset.x) || 0;
       const zdy = (zone.offset && zone.offset.y) || 0;
       const zsc = zone.scale || 1.0;
-      applyOverlayPos(el, lf, tf, wf, hf, w, h, rot, zdx, zdy, zsc);
-      el.classList.toggle('zone-selected', zKey === selectedPlacement);
+      // Use per-zone rotation if stored, else fall back to TEXT_PLACEMENT default
+      const zrot = (zone.rotation !== undefined) ? zone.rotation : rot;
+      applyOverlayPos(el, lf, tf, wf, hf, w, h, zrot, zdx, zdy, zsc);
+      const isSelected = zKey === selectedPlacement;
+      el.classList.toggle('zone-selected', isSelected);
+      el.classList.toggle('zone-inactive', !isSelected);
     });
 
     // Show sleeve indicators when those zones are active
@@ -669,6 +681,11 @@ function renderPreview(){
     const rightInd = document.getElementById('sleeveRightIndicator');
     if(leftInd)  leftInd.style.display  = state.zones['left_sleeve']  ? 'block' : 'none';
     if(rightInd) rightInd.style.display = state.zones['right_sleeve'] ? 'block' : 'none';
+
+    // Disable main logo pointer events when a zone with content is the active selection
+    // so sleeve/chest zone overlays don't get stolen by the chest logo hitbox
+    const activeZoneHasContent = !!(state.zones[selectedPlacement] && state.zones[selectedPlacement].src);
+    overlay.classList.toggle('main-inactive', activeZoneHasContent);
   };
 
   // Use a render token to avoid stale onload callbacks overwriting fresh renders
@@ -1093,6 +1110,39 @@ taglineInput.addEventListener('input', liveUpdateFontPreviews);
 
 function selectPlacement(btn){ selectZone(btn); }
 
+function setSleeveFlip(flipped){
+  const zone = state.zones[selectedPlacement];
+  const defaultRot = selectedPlacement === 'left_sleeve' ? -90 : 90;
+  const newRot = flipped ? defaultRot + 180 : defaultRot;
+  if(zone) zone.rotation = newRot;
+  else {
+    // Store rotation intent for when zone is created
+    if(!state._zoneRotations) state._zoneRotations = {};
+    state._zoneRotations[selectedPlacement] = newRot;
+  }
+  document.getElementById('flipBtnWristUp').classList.toggle('selected', !flipped);
+  document.getElementById('flipBtnShoulderUp').classList.toggle('selected', flipped);
+  renderPreview();
+}
+
+function syncSleeveFlipUI(){
+  const isSleeve = selectedPlacement === 'left_sleeve' || selectedPlacement === 'right_sleeve';
+  const flipRow = document.getElementById('sleeveFlipRow');
+  flipRow.hidden = !isSleeve;
+  if(isSleeve){
+    flipRow.style.display = 'flex';
+    const zone = state.zones[selectedPlacement];
+    const defaultRot = selectedPlacement === 'left_sleeve' ? -90 : 90;
+    const storedRot = zone ? zone.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement]);
+    const currentRot = (storedRot !== undefined) ? storedRot : defaultRot;
+    const isFlipped = Math.abs(currentRot - defaultRot) > 90;
+    document.getElementById('flipBtnWristUp').classList.toggle('selected', !isFlipped);
+    document.getElementById('flipBtnShoulderUp').classList.toggle('selected', isFlipped);
+  } else {
+    flipRow.style.display = 'none';
+  }
+}
+
 function selectZone(btn){
   selectedPlacement = btn.dataset.place;
   state.customPlacement = selectedPlacement;
@@ -1101,6 +1151,7 @@ function selectZone(btn){
   btn.classList.add('selected');
   const isSleeve = selectedPlacement === 'left_sleeve' || selectedPlacement === 'right_sleeve';
   document.getElementById('sleeveNote').hidden = !isSleeve;
+  syncSleeveFlipUI();
   // Load existing zone config if any
   const existing = state.zones[selectedPlacement];
   if(existing){
@@ -1139,7 +1190,9 @@ function applyZoneText(){
   const isDark = cObj ? cObj.dark : false;
   const src = renderTextToCanvas(txt, tagline||null, selectedFont, isDark);
   const existing = state.zones[selectedPlacement];
-  state.zones[selectedPlacement] = {type:'text', src, text: txt + (tagline ? '\n'+tagline : ''), offset: existing ? existing.offset : {x:0,y:0}, scale: existing ? existing.scale : 1.0};
+  const defaultRot = selectedPlacement === 'left_sleeve' ? -90 : selectedPlacement === 'right_sleeve' ? 90 : 0;
+  const storedRot = existing ? existing.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement]);
+  state.zones[selectedPlacement] = {type:'text', src, text: txt + (tagline ? '\n'+tagline : ''), offset: existing ? existing.offset : {x:0,y:0}, scale: existing ? existing.scale : 1.0, rotation: (storedRot !== undefined) ? storedRot : defaultRot};
   renderPreview();
 }
 
@@ -1180,7 +1233,9 @@ function clearZoneLogo(){
       if(designId && designSrc){
         const d = DESIGNS.find(x=>x.id===designId);
         const _ex1 = state.zones[selectedPlacement];
-        state.zones[selectedPlacement] = {type:'logo', src:designSrc, name: d ? d.name : designId, offset: _ex1 ? _ex1.offset : {x:0,y:0}, scale: _ex1 ? _ex1.scale : 1.0};
+        const _defRot1 = selectedPlacement==='left_sleeve'?-90:selectedPlacement==='right_sleeve'?90:0;
+        const _rot1 = _ex1 ? _ex1.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement] !== undefined ? state._zoneRotations[selectedPlacement] : _defRot1);
+        state.zones[selectedPlacement] = {type:'logo', src:designSrc, name: d ? d.name : designId, offset: _ex1 ? _ex1.offset : {x:0,y:0}, scale: _ex1 ? _ex1.scale : 1.0, rotation: _rot1};
         const thumb = document.getElementById('zoneUploadThumb');
         const prevRow = document.getElementById('zoneUploadPreviewRow');
         const nameEl = document.getElementById('zoneUploadName');
@@ -1200,7 +1255,9 @@ function clearZoneLogo(){
     reader.onload = ev => {
       const src = ev.target.result;
       const _ex2 = state.zones[selectedPlacement];
-      state.zones[selectedPlacement] = {type:'logo', src, name: file.name, offset: _ex2 ? _ex2.offset : {x:0,y:0}, scale: _ex2 ? _ex2.scale : 1.0};
+      const _defRot2 = selectedPlacement==='left_sleeve'?-90:selectedPlacement==='right_sleeve'?90:0;
+      const _rot2 = _ex2 ? _ex2.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement] !== undefined ? state._zoneRotations[selectedPlacement] : _defRot2);
+      state.zones[selectedPlacement] = {type:'logo', src, name: file.name, offset: _ex2 ? _ex2.offset : {x:0,y:0}, scale: _ex2 ? _ex2.scale : 1.0, rotation: _rot2};
       const thumb = document.getElementById('zoneUploadThumb');
       const prevRow = document.getElementById('zoneUploadPreviewRow');
       const nameEl = document.getElementById('zoneUploadName');
@@ -1226,9 +1283,11 @@ const TEXT_PLACEMENT = {
   // CSS height = 0.26×300 = 78px, half = 39px.
   // Left:  lf=0.12 → left=36, center_x=36+0.07×300=36+21=57, 57-39=18px clear ✓
   // Right: lf=0.74 → left=222, center_x=222+21=243, 300-243-39=18px clear ✓
-  // Sleeve: wider CSS height so rotated text fills more of the arm
-  left_sleeve: {pos: [0.10, 0.22, 0.20, 0.40], rotate: -90},
-  right_sleeve:{pos: [0.70, 0.22, 0.20, 0.40], rotate:  90},
+  // Sleeve: CSS height = garment height (1.0) so rotated text can fill the full arm length.
+  // With -90/90 rotation, visual print width = CSS height = full garment height.
+  // wf=0.18 is the sleeve column width; lf centres it on each arm.
+  left_sleeve: {pos: [0.05, 0.00, 0.18, 1.00], rotate: -90},
+  right_sleeve:{pos: [0.77, 0.00, 0.18, 1.00], rotate:  90},
 };
 
 function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment){
