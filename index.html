@@ -582,7 +582,8 @@ function renderPreview(){
     updateSummary(dObj,gObj,cObj); updateBtn(); return;
   }
 
-  garmentImg.src = 'garments/' + cObj.photo;
+  const newSrc = 'garments/' + cObj.photo;
+  if(garmentImg.src !== newSrc && !garmentImg.src.endsWith(newSrc)) garmentImg.src = newSrc;
   garmentImg.style.display = 'block';
   noGarment.style.display = 'none';
 
@@ -649,8 +650,11 @@ function renderPreview(){
     if(rightInd) rightInd.style.display = state.zones['right_sleeve'] ? 'block' : 'none';
   };
 
+  // Use a render token to avoid stale onload callbacks overwriting fresh renders
+  const _renderToken = (garmentImg._renderToken = (garmentImg._renderToken||0)+1);
+  const guardedDoPosition = () => { if(garmentImg._renderToken === _renderToken) doPosition(); };
   if(garmentImg.complete && garmentImg.naturalWidth > 0) doPosition();
-  else garmentImg.onload = doPosition;
+  else garmentImg.onload = guardedDoPosition;
 
   // Show size slider when a main logo is being displayed
   const hasActive = !!(state.uploadedLogoSrc || state.design);
