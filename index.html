@@ -72,7 +72,15 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 /* Preview wrap — watermark lives here */
 #previewWrap{width:100%;max-width:300px;position:relative;border-radius:12px;overflow:hidden;}
 #previewWrap svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.22));}
-#designOverlay{position:absolute;pointer-events:none;-webkit-user-drag:none;image-rendering:auto;}
+#designOverlay{position:absolute;object-fit:contain;-webkit-user-drag:none;image-rendering:auto;
+  cursor:grab;touch-action:none;}
+#designOverlay:active{cursor:grabbing;}
+#textOverlay{position:absolute;object-fit:contain;pointer-events:none;-webkit-user-drag:none;}
+/* Drag handle hint */
+#dragHint{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.55);color:#fff;font-size:0.62rem;padding:2px 8px;border-radius:10px;
+  pointer-events:none;white-space:nowrap;opacity:0;transition:opacity 0.3s;z-index:9;}
+#previewWrap:hover #dragHint{opacity:1;}
 
 /* Watermark — diagonal repeating text over entire preview */
 #watermark{
@@ -232,22 +240,44 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
         <div class="placement-row" id="placementRow">
           <button class="placement-btn selected" data-place="chest" onclick="selectPlacement(this)">Chest Centre</button>
           <button class="placement-btn" data-place="left_chest" onclick="selectPlacement(this)">Left Chest</button>
+          <button class="placement-btn" data-place="name_tag" onclick="selectPlacement(this)">Name Tag</button>
           <button class="placement-btn" data-place="back" onclick="selectPlacement(this)">Full Back</button>
+          <button class="placement-btn" data-place="left_sleeve" onclick="selectPlacement(this)">Left Sleeve ↕</button>
+          <button class="placement-btn" data-place="right_sleeve" onclick="selectPlacement(this)">Right Sleeve ↕</button>
+        </div>
+        <div id="sleeveNote" hidden style="font-size:0.7rem;color:var(--muted);margin-top:4px;line-height:1.4;">
+          Sleeve text runs vertically — rotated so it reads from wrist to shoulder. Drag to reposition on the preview.
         </div>
         <button class="text-apply-btn" onclick="applyTextLogo()">Apply to Preview →</button>
+        <!-- Logo size slider (shown when a logo/text is active) -->
+        <div id="logoSizeRow" style="margin-top:10px;display:none;">
+          <div class="text-field-label" style="display:flex;justify-content:space-between;">
+            <span>Logo / text size</span>
+            <span id="logoScaleLabel">100%</span>
+          </div>
+          <input type="range" id="logoScaleSlider" min="40" max="200" value="100" step="5"
+            style="width:100%;accent-color:var(--accent);cursor:pointer;margin-top:4px;">
+        </div>
         <div class="upload-note">Your artwork stays on your device — it's never uploaded to our servers.</div>
       </div>
     </div>
   </div>
 
   <div class="preview-panel">
-    <div class="preview-title">Live Preview</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;">
+      <div class="preview-title">Live Preview</div>
+      <button onclick="openZoomModal()" style="background:none;border:1px solid var(--border);border-radius:6px;
+        padding:3px 8px;cursor:pointer;font-size:0.72rem;color:var(--muted);font-family:inherit;"
+        title="Zoom in for detail">🔍 Zoom</button>
+    </div>
     <div id="previewWrap">
       <img id="garmentImg" src="" alt="" style="display:none;width:100%;border-radius:8px;-webkit-user-drag:none;pointer-events:none;">
       <div id="noGarment" style="width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:var(--canvas-bg);border-radius:8px;color:var(--muted);font-size:0.85rem;text-align:center;padding:20px;">
         Pick a garment &amp; colour<br>to see a preview
       </div>
-      <img id="designOverlay" src="" alt="" style="display:none;position:absolute;object-fit:contain;" draggable="false">
+      <img id="designOverlay" src="" alt="" style="display:none;" draggable="false">
+      <img id="textOverlay"   src="" alt="" style="display:none;" draggable="false">
+      <div id="dragHint">drag to reposition</div>
       <!-- Watermark -->
       <div id="watermark">
         <svg viewBox="0 0 300 340" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
@@ -272,6 +302,17 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
     <button class="order-btn" id="orderBtn" disabled onclick="placeOrder()">Order This →</button>
     <div class="note">You'll be taken to our store to complete your order. Custom requests are confirmed by Tanya within 24 hrs.</div>
   </div>
+<!-- Preview zoom modal -->
+<div id="zoomModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:1000;
+  align-items:center;justify-content:center;cursor:zoom-out;" onclick="closeZoomModal()">
+  <div style="max-width:92vmin;max-height:92vmin;position:relative;border-radius:14px;overflow:hidden;">
+    <img id="zoomImg" src="" alt="" style="width:100%;height:auto;display:block;-webkit-user-drag:none;">
+    <div id="zoomDesignOverlay" style="position:absolute;object-fit:contain;pointer-events:none;"></div>
+    <div style="position:absolute;bottom:12px;right:14px;font-size:0.7rem;color:rgba(255,255,255,0.6);">
+      Tap anywhere to close
+    </div>
+  </div>
+</div>
 </div>
 
 <script>
@@ -280,7 +321,9 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('dragstart',   e => e.preventDefault());
 
 // ── STATE ──
-let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null,customPlacement:null};
+// logoOffset: {x,y} in pixels relative to computed default position (drag offset)
+// logoScale: 1.0 = default size, user-adjustable
+let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null,customPlacement:null,logoOffset:{x:0,y:0},logoScale:1.0,uploadedLogoSrc:null,_textSrc:null};
 
 const designGrid  = document.getElementById('designGrid');
 const garmentGrid = document.getElementById('garmentGrid');
@@ -417,74 +460,122 @@ COLOURS.forEach(c => {
   colourGrid.appendChild(el);
 });
 
+const textOverlay  = document.getElementById('textOverlay');
+const logoSizeRow  = document.getElementById('logoSizeRow');
+const logoScaleSlider = document.getElementById('logoScaleSlider');
+const logoScaleLabel  = document.getElementById('logoScaleLabel');
+
+function applyOverlayPos(el, lf, tf, wf, hf, w, h, rotation, dx, dy, scale){
+  const sc = (scale || 1.0);
+  const ow = wf*w*sc, oh = hf*h*sc;
+  // Centre stays the same as unscaled, offset from there
+  const cx = lf*w + wf*w/2 + dx;
+  const cy = tf*h + hf*h/2 + dy;
+  el.style.left   = (cx - ow/2) + 'px';
+  el.style.top    = (cy - oh/2) + 'px';
+  el.style.width  = ow + 'px';
+  el.style.height = oh + 'px';
+  el.style.transform = rotation ? `rotate(${rotation}deg)` : '';
+  el.style.transformOrigin = '50% 50%';
+}
+
 function renderPreview(){
   const cObj = COLOURS.find(c=>c.id===state.colour);
   const gObj = GARMENTS.find(g=>g.id===state.garment);
   const dObj = DESIGNS.find(d=>d.id===state.design);
+  const multiWarn = document.getElementById('multicolourWarn');
 
   if(!cObj){
     garmentImg.style.display = 'none';
     noGarment.style.display = 'flex';
     overlay.style.display = 'none';
+    textOverlay.style.display = 'none';
+    multiWarn.hidden = true;
     updateSummary(dObj,gObj,cObj); updateBtn(); return;
   }
 
-  // Show the real garment photo
   garmentImg.src = 'garments/' + cObj.photo;
   garmentImg.style.display = 'block';
   noGarment.style.display = 'none';
 
-  // If customer typed a text logo, re-render it in the right colour for this garment
+  // Re-render text canvas if colour changed
   if(state.customText && cObj){
     const parts = state.customText.split('\n');
-    state.customLogo = renderTextToCanvas(parts[0], parts[1]||null, selectedFont, cObj.dark);
-    uploadThumb.src = state.customLogo;
+    const textSrc = renderTextToCanvas(parts[0], parts[1]||null, selectedFont, cObj.dark);
+    // If there's ALSO an uploaded logo, put text in textOverlay; else use main overlay
+    if(state.uploadedLogoSrc){
+      textOverlay.src = textSrc;
+      state._textSrc = textSrc;
+    } else {
+      state.customLogo = textSrc;
+      if(uploadThumb) uploadThumb.src = textSrc;
+      state._textSrc = null;
+    }
   }
 
-  // Determine which logo src to show: custom upload takes priority over preset design
-  const logoSrc = state.customLogo || (dObj ? dObj.src : null);
+  // Logo source: uploaded file takes priority over preset design
+  const logoSrc = state.uploadedLogoSrc || (dObj ? dObj.src : null);
+  // Text source: separate canvas render when logo+text both active
+  const textSrc  = state._textSrc || null;
 
-  // Auto-adapt logo colour to garment: invert dark logos on dark garments so they show white
-  // Multicolour designs are flagged — invert would ruin them, so skip it and warn Tawnya instead
-  const isMulticolour = dObj && dObj.multicolour && !state.customLogo;
-  const multiWarn = document.getElementById('multicolourWarn');
+  // Invert for dark garments (preset designs only, not uploads)
+  const isMulticolour = dObj && dObj.multicolour && !state.uploadedLogoSrc;
   if(isMulticolour && cObj.dark){
     multiWarn.hidden = false;
-    overlay.style.filter = 'none'; // don't invert — looks wrong on multicolour
+    overlay.style.filter = 'none';
   } else {
     multiWarn.hidden = true;
-    if(logoSrc && cObj.dark && !state.customLogo){
-      overlay.style.filter = 'invert(1) brightness(1.1)';
-    } else {
-      overlay.style.filter = 'none';
-    }
+    overlay.style.filter = (logoSrc && cObj.dark && !state.uploadedLogoSrc) ? 'invert(1) brightness(1.1)' : 'none';
   }
+  textOverlay.style.filter = 'none';
 
-  // Wait for image to load to position overlay correctly
-  if(logoSrc){
-    const positionOverlay = () => {
-      const w = garmentImg.offsetWidth  || garmentImg.naturalWidth  || 600;
-      const h = garmentImg.offsetHeight || garmentImg.naturalHeight || 600;
-      const shape = gObj ? gObj.id : 'pullover_hoodie';
-      // Custom placement override for text logos
-      const placementKey = state.customPlacement || 'chest';
-      const placementPos = (state.customLogo && TEXT_PLACEMENT[placementKey]) ? TEXT_PLACEMENT[placementKey].pos : null;
-      const [lf, tf, wf, hf] = placementPos || CHEST_POS[shape] || CHEST_POS.pullover_hoodie;
+  const doPosition = () => {
+    const w = garmentImg.offsetWidth  || garmentImg.naturalWidth  || 600;
+    const h = garmentImg.offsetHeight || garmentImg.naturalHeight || 600;
+    const shape = gObj ? gObj.id : 'pullover_hoodie';
+    const dx = state.logoOffset.x, dy = state.logoOffset.y;
+
+    const sc = state.logoScale || 1.0;
+    if(logoSrc){
+      const placementKey = (state.uploadedLogoSrc || !state.customText) ? (state.customPlacement||'chest') : 'chest';
+      const pl = TEXT_PLACEMENT[placementKey];
+      const [lf,tf,wf,hf] = (pl && pl.pos) ? pl.pos : (CHEST_POS[shape]||CHEST_POS.pullover_hoodie);
+      const rot = (pl && pl.rotate) ? pl.rotate : 0;
       overlay.src = logoSrc;
       overlay.style.display = 'block';
-      overlay.style.left   = (lf * w) + 'px';
-      overlay.style.top    = (tf * h) + 'px';
-      overlay.style.width  = (wf * w) + 'px';
-      overlay.style.height = (hf * h) + 'px';
-    };
-    if(garmentImg.complete && garmentImg.naturalWidth > 0){
-      positionOverlay();
+      applyOverlayPos(overlay, lf, tf, wf, hf, w, h, rot, dx, dy, sc);
     } else {
-      garmentImg.onload = positionOverlay;
+      overlay.style.display = 'none';
     }
-  } else {
-    overlay.style.display = 'none';
-  }
+
+    // Text overlay — positioned below the logo when both active
+    if(textSrc){
+      const pl = TEXT_PLACEMENT[state.customPlacement||'chest'];
+      const [lf,tf,wf,hf] = (pl && pl.pos) ? pl.pos : (CHEST_POS[shape]||CHEST_POS.pullover_hoodie);
+      textOverlay.src = textSrc;
+      textOverlay.style.display = 'block';
+      applyOverlayPos(textOverlay, lf, tf + hf + 0.01, wf, hf*0.45, w, h, 0, dx, 0, 1.0);
+    } else if(!logoSrc && state.customLogo){
+      // Text-only path: render in main overlay
+      const placementKey = state.customPlacement || 'chest';
+      const pl = TEXT_PLACEMENT[placementKey];
+      const [lf,tf,wf,hf] = (pl && pl.pos) ? pl.pos : (CHEST_POS[shape]||CHEST_POS.pullover_hoodie);
+      const rot = (pl && pl.rotate) ? pl.rotate : 0;
+      overlay.src = state.customLogo;
+      overlay.style.display = 'block';
+      applyOverlayPos(overlay, lf, tf, wf, hf, w, h, rot, dx, dy, sc);
+      textOverlay.style.display = 'none';
+    } else {
+      textOverlay.style.display = 'none';
+    }
+  };
+
+  if(garmentImg.complete && garmentImg.naturalWidth > 0) doPosition();
+  else garmentImg.onload = doPosition;
+
+  // Show size slider when anything is actively being displayed
+  const hasActive = !!(state.uploadedLogoSrc || state.customLogo || state.design);
+  if(typeof logoSizeRow !== 'undefined') logoSizeRow.style.display = hasActive ? 'block' : 'none';
 
   updateSummary(dObj,gObj,cObj); updateBtn();
 }
@@ -665,11 +756,11 @@ function extractDominantColours(canvas, count=6){
   tmp.width=w; tmp.height=h;
   tmp.getContext('2d').drawImage(canvas,0,0,w,h);
   const data = tmp.getContext('2d').getImageData(0,0,w,h).data;
-  // Collect opaque pixels quantised to 32-step buckets
+  // Collect opaque pixels quantised to 16-step buckets (finer than 32 to catch saturated colours like orange)
   const buckets = {};
   for(let i=0;i<data.length;i+=4){
     if(data[i+3]<128) continue; // skip transparent
-    const r=data[i]>>5, g=data[i+1]>>5, b=data[i+2]>>5;
+    const r=data[i]>>4, g=data[i+1]>>4, b=data[i+2]>>4;
     const key=`${r},${g},${b}`;
     if(!buckets[key]) buckets[key]={r:0,g:0,b:0,n:0,key};
     buckets[key].r+=data[i]; buckets[key].g+=data[i+1];
@@ -677,11 +768,11 @@ function extractDominantColours(canvas, count=6){
   }
   // Sort by frequency
   const sorted = Object.values(buckets).sort((a,b)=>b.n-a.n);
-  // Pick top N that are visually distinct from each other
+  // Pick top N that are visually distinct from each other (lower threshold → catches more colours)
   const picked = [];
   for(const bucket of sorted){
     const avg = [Math.round(bucket.r/bucket.n), Math.round(bucket.g/bucket.n), Math.round(bucket.b/bucket.n)];
-    if(picked.every(p=>colourDistance(p,avg)>40)){
+    if(picked.every(p=>colourDistance(p,avg)>25)){
       picked.push(avg);
       if(picked.length>=count) break;
     }
@@ -735,16 +826,19 @@ function loadCustomLogo(file){
   const reader = new FileReader();
   reader.onload = e => {
     _rawLogoDataUrl = e.target.result;
-    state.customLogo = e.target.result;
+    state.uploadedLogoSrc = e.target.result;  // real uploaded file
+    state.customLogo = e.target.result;        // also set customLogo for order/summary
     state.customLogoName = file.name.replace(/\.[^.]+$/, '');
     state.design = null;
-    state.customText = null;
+    // Do NOT clear customText — user may want both logo + text
+    state.logoOffset = {x:0, y:0};
+    state.logoScale = 1.0;
     document.querySelectorAll('.design-thumb').forEach(x => x.classList.remove('selected'));
     uploadThumb.src = e.target.result;
     uploadNameEl.textContent = state.customLogoName;
     uploadPrevRow.style.display = 'flex';
     uploadZone.style.display = 'none';
-    companyInput.value = '';
+    // Don't clear companyInput — let user keep their text too
     // Analyse the image for background + extract palette
     const img = new Image();
     img.onload = () => {
@@ -766,8 +860,15 @@ function clearCustomLogo(){
   state.customLogoName = null;
   state.customText = null;
   state.customPlacement = null;
+  state.uploadedLogoSrc = null;
+  state._textSrc = null;
+  state.logoOffset = {x:0, y:0};
+  state.logoScale = 1.0;
   _rawLogoDataUrl = null;
   logoUpload.value = '';
+  companyInput.value = '';
+  taglineInput.value = '';
+  document.getElementById('logoScaleSlider').value = 100;
   uploadPrevRow.style.display = 'none';
   uploadZone.style.display = '';
   document.getElementById('bgWarnBanner').hidden = true;
@@ -825,16 +926,24 @@ taglineInput.addEventListener('input', liveUpdateFontPreviews);
 
 function selectPlacement(btn){
   selectedPlacement = btn.dataset.place;
+  state.customPlacement = selectedPlacement;
+  state.logoOffset = {x:0, y:0};
   document.querySelectorAll('.placement-btn').forEach(x=>x.classList.remove('selected'));
   btn.classList.add('selected');
+  const isSleeve = selectedPlacement === 'left_sleeve' || selectedPlacement === 'right_sleeve';
+  document.getElementById('sleeveNote').hidden = !isSleeve;
   if(state.customText) applyTextLogo();
+  else renderPreview();
 }
 
-// Placement → CHEST_POS-style [leftFrac, topFrac, widthFrac, heightFrac]
+// Placement → CHEST_POS-style [leftFrac, topFrac, widthFrac, heightFrac] + optional rotate (degrees)
 const TEXT_PLACEMENT = {
-  chest:      {pos: null},           // use garment's default CHEST_POS
-  left_chest: {pos: [0.28, 0.34, 0.22, 0.18]},
-  back:       {pos: [0.20, 0.30, 0.60, 0.50]},
+  chest:       {pos: null},                              // use garment's default CHEST_POS
+  left_chest:  {pos: [0.10, 0.30, 0.22, 0.18]},
+  name_tag:    {pos: [0.12, 0.26, 0.28, 0.08]},         // small strip upper-left
+  back:        {pos: [0.15, 0.25, 0.70, 0.55]},
+  left_sleeve: {pos: [0.04, 0.28, 0.14, 0.38], rotate: -90},
+  right_sleeve:{pos: [0.82, 0.28, 0.14, 0.38], rotate:  90},
 };
 
 function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment){
@@ -881,18 +990,118 @@ function applyTextLogo(){
   const cObj = COLOURS.find(c=>c.id===state.colour);
   const isDark = cObj ? cObj.dark : false;
   state.customText = txt + (tagline ? '\n'+tagline : '');
-  state.customLogo = renderTextToCanvas(txt, tagline||null, selectedFont, isDark);
-  state.customLogoName = txt + (tagline ? ' · '+tagline : '');
   state.customPlacement = selectedPlacement;
-  state.design = null;
-  document.querySelectorAll('.design-thumb').forEach(x => x.classList.remove('selected'));
-  uploadThumb.src = state.customLogo;
-  uploadNameEl.textContent = state.customLogoName;
-  uploadPrevRow.style.display = 'flex';
-  uploadZone.style.display = 'none';
+  const textCanvas = renderTextToCanvas(txt, tagline||null, selectedFont, isDark);
+  if(state.uploadedLogoSrc){
+    // Two-overlay mode: uploaded logo stays in #designOverlay, text goes in #textOverlay
+    state._textSrc = textCanvas;
+    // Keep state.customLogo pointing at uploaded logo (for order summary)
+    uploadNameEl.textContent = state.customLogoName + ' + text';
+  } else {
+    // Text-only mode
+    state._textSrc = null;
+    state.customLogo = textCanvas;
+    state.customLogoName = txt + (tagline ? ' · '+tagline : '');
+    state.design = null;
+    document.querySelectorAll('.design-thumb').forEach(x => x.classList.remove('selected'));
+    uploadThumb.src = textCanvas;
+    uploadNameEl.textContent = state.customLogoName;
+    uploadPrevRow.style.display = 'flex';
+    uploadZone.style.display = 'none';
+  }
   renderPreview();
 }
 
 companyInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyTextLogo(); });
 taglineInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyTextLogo(); });
+
+// ── Logo scale slider ─────────────────────────────────────────────────────────
+logoScaleSlider.addEventListener('input', () => {
+  state.logoScale = parseInt(logoScaleSlider.value) / 100;
+  logoScaleLabel.textContent = logoScaleSlider.value + '%';
+  renderPreview();
+});
+
+// ── Drag to reposition overlay ────────────────────────────────────────────────
+let _drag = null; // {startX, startY, startOX, startOY}
+
+overlay.addEventListener('pointerdown', e => {
+  if(e.button && e.button !== 0) return;
+  e.preventDefault();
+  overlay.setPointerCapture(e.pointerId);
+  _drag = {startX: e.clientX, startY: e.clientY, startOX: state.logoOffset.x, startOY: state.logoOffset.y};
+  overlay.style.cursor = 'grabbing';
+});
+
+overlay.addEventListener('pointermove', e => {
+  if(!_drag) return;
+  state.logoOffset.x = _drag.startOX + (e.clientX - _drag.startX);
+  state.logoOffset.y = _drag.startOY + (e.clientY - _drag.startY);
+  renderPreview();
+});
+
+overlay.addEventListener('pointerup', () => {
+  _drag = null;
+  overlay.style.cursor = 'grab';
+});
+
+overlay.addEventListener('pointercancel', () => {
+  _drag = null;
+  overlay.style.cursor = 'grab';
+});
+
+// ── Zoom modal ────────────────────────────────────────────────────────────────
+const zoomModal = document.getElementById('zoomModal');
+const zoomImg   = document.getElementById('zoomImg');
+
+function openZoomModal(){
+  if(!garmentImg.src || !garmentImg.naturalWidth) return;
+  // Composite garment + overlay onto a canvas for a clean zoomed image
+  const cw = garmentImg.naturalWidth  || 600;
+  const ch = garmentImg.naturalHeight || 600;
+  const canvas = document.createElement('canvas');
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  // Draw garment
+  ctx.drawImage(garmentImg, 0, 0, cw, ch);
+  // Draw logo overlay at the same fractional position
+  const pw = garmentImg.offsetWidth  || cw;
+  const ph = garmentImg.offsetHeight || ch;
+  const scaleX = cw / pw, scaleY = ch / ph;
+  function drawImgOverlay(imgEl){
+    if(!imgEl.src || imgEl.style.display === 'none') return;
+    const el = imgEl;
+    const lPx = parseFloat(el.style.left) || 0;
+    const tPx = parseFloat(el.style.top)  || 0;
+    const wPx = parseFloat(el.style.width)  || 0;
+    const hPx = parseFloat(el.style.height) || 0;
+    const rotStr = el.style.transform;
+    const rot = rotStr ? parseFloat(rotStr.replace('rotate(','')) * Math.PI / 180 : 0;
+    const cx = (lPx + wPx/2) * scaleX;
+    const cy = (tPx + hPx/2) * scaleY;
+    const dw = wPx * scaleX, dh = hPx * scaleY;
+    ctx.save();
+    ctx.translate(cx, cy);
+    if(rot) ctx.rotate(rot);
+    // Apply same filter (invert) if set
+    const flt = el.style.filter;
+    if(flt && flt !== 'none'){
+      ctx.filter = flt;
+    }
+    ctx.drawImage(imgEl, -dw/2, -dh/2, dw, dh);
+    ctx.restore();
+    ctx.filter = 'none';
+  }
+  drawImgOverlay(overlay);
+  drawImgOverlay(textOverlay);
+  zoomImg.src = canvas.toDataURL('image/png');
+  zoomModal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeZoomModal(){
+  zoomModal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
 </script>
