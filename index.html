@@ -44,6 +44,7 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
   overflow:hidden;background:#fff;position:relative;transition:border-color 0.15s,transform 0.1s;}
 .design-thumb:hover{border-color:var(--accent2);transform:scale(1.04);}
 .design-thumb.selected{border-color:var(--selected);box-shadow:0 0 0 2px var(--selected);}
+.design-thumb.dragging{opacity:0.5;transform:scale(0.95);}
 .design-thumb img{width:100%;height:100%;object-fit:contain;padding:4px;display:block;
   image-rendering:auto;-webkit-user-drag:none;pointer-events:none;}
 .design-thumb .tlabel{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.65);
@@ -135,6 +136,10 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
   background:var(--surface);color:var(--fg);cursor:pointer;font-size:0.75rem;font-family:inherit;}
 .placement-btn:hover{border-color:var(--accent2);}
 .placement-btn.selected{border-color:var(--accent);background:var(--sel-bg);color:var(--accent);font-weight:600;}
+.zone-type-btn{padding:6px 14px;border-radius:16px;border:1.5px solid var(--border);
+  background:var(--surface);color:var(--fg);cursor:pointer;font-size:0.78rem;font-family:inherit;transition:all 0.15s;}
+.zone-type-btn:hover{border-color:var(--accent2);}
+.zone-type-btn.selected{border-color:var(--accent);background:var(--sel-bg);color:var(--accent);font-weight:600;}
 .text-apply-btn{width:100%;padding:9px;background:var(--accent);color:white;border:none;
   border-radius:8px;cursor:pointer;font-size:0.85rem;font-family:inherit;margin-top:6px;font-weight:600;}
 .text-apply-btn:hover{background:var(--accent2);}
@@ -196,8 +201,8 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
       <div class="step-header">
         <div class="step-num step-num-opt">✦</div>
         <div>
-          <h2>Have Your Own Logo?</h2>
-          <div class="step-sub">Upload it and see it on your chosen garment</div>
+          <h2>Main Logo</h2>
+          <div class="step-sub">Chest centre — upload your company logo</div>
         </div>
       </div>
       <div class="step-body">
@@ -205,7 +210,8 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
           <input type="file" id="logoUpload" accept="image/*" style="display:none;">
           <div class="upload-icon">⬆</div>
           <div class="upload-label">Drop your logo here or <span class="upload-link">browse</span></div>
-          <div class="upload-hint">PNG with transparent background works best · JPG also accepted</div>
+          <div class="upload-hint">PNG with transparent background works best · JPG also accepted<br>
+            Or drag any design from Step 1 directly here</div>
         </div>
         <div id="uploadPreviewRow" style="display:none;">
           <img id="uploadThumb" class="upload-thumb" src="" alt="Your logo">
@@ -219,46 +225,81 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
           This image appears to have a solid background — it may not print cleanly on your garment.
           <br><button id="bgRemoveBtn" onclick="removeBackground()">✂ Remove Background</button>
         </div>
-        <div class="upload-divider"><span>or add custom text</span></div>
-        <div class="text-fields">
-          <div>
-            <div class="text-field-label">Name / Team / Company</div>
-            <input type="text" id="companyName" class="company-input" placeholder="e.g. Trail Blazers, Smith & Co." maxlength="40">
-          </div>
-          <div>
-            <div class="text-field-label">Tagline / Subtitle <span style="font-weight:400;opacity:0.7;">(optional)</span></div>
-            <input type="text" id="taglineName" class="company-input" placeholder="e.g. Lumby BC · Est. 2018" maxlength="40">
-          </div>
-        </div>
-        <div class="font-picker-label">Choose a font style</div>
-        <div class="font-picker" id="fontPicker"></div>
-        <div class="palette-label" id="paletteLabel" style="margin-top:10px;">Font colour</div>
-        <div class="palette-row" id="paletteRow">
-          <div class="palette-swatch auto-swatch selected" title="Auto (matches garment)" data-colour="auto" onclick="selectFontColour(this,'auto')"></div>
-        </div>
-        <div class="font-picker-label" style="margin-top:10px;">Text placement</div>
-        <div class="placement-row" id="placementRow">
-          <button class="placement-btn selected" data-place="chest" onclick="selectPlacement(this)">Chest Centre</button>
-          <button class="placement-btn" data-place="left_chest" onclick="selectPlacement(this)">Left Chest</button>
-          <button class="placement-btn" data-place="name_tag" onclick="selectPlacement(this)">Name Tag</button>
-          <button class="placement-btn" data-place="back" onclick="selectPlacement(this)">Full Back</button>
-          <button class="placement-btn" data-place="left_sleeve" onclick="selectPlacement(this)">Left Sleeve ↕</button>
-          <button class="placement-btn" data-place="right_sleeve" onclick="selectPlacement(this)">Right Sleeve ↕</button>
-        </div>
-        <div id="sleeveNote" hidden style="font-size:0.7rem;color:var(--muted);margin-top:4px;line-height:1.4;">
-          Sleeve text runs vertically — rotated so it reads from wrist to shoulder. Drag to reposition on the preview.
-        </div>
-        <button class="text-apply-btn" onclick="applyTextLogo()">Apply to Preview →</button>
-        <!-- Logo size slider (shown when a logo/text is active) -->
+        <!-- Logo size slider for main logo -->
         <div id="logoSizeRow" style="margin-top:10px;display:none;">
           <div class="text-field-label" style="display:flex;justify-content:space-between;">
-            <span>Logo / text size</span>
-            <span id="logoScaleLabel">100%</span>
+            <span>Logo size</span><span id="logoScaleLabel">100%</span>
           </div>
           <input type="range" id="logoScaleSlider" min="40" max="200" value="100" step="5"
             style="width:100%;accent-color:var(--accent);cursor:pointer;margin-top:4px;">
         </div>
         <div class="upload-note">Your artwork stays on your device — it's never uploaded to our servers.</div>
+      </div>
+    </div>
+
+    <div class="step step-custom" id="extraPrintStep">
+      <div class="step-header">
+        <div class="step-num step-num-opt">+</div>
+        <div>
+          <h2>Extra Print Zones</h2>
+          <div class="step-sub">Add text or a logo to any other location</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <!-- Zone selector tabs -->
+        <div class="placement-row" id="placementRow">
+          <button class="placement-btn selected" data-place="left_chest" onclick="selectZone(this)">Left Chest</button>
+          <button class="placement-btn" data-place="name_tag" onclick="selectZone(this)">Name Tag</button>
+          <button class="placement-btn" data-place="back" onclick="selectZone(this)">Full Back</button>
+          <button class="placement-btn" data-place="left_sleeve" onclick="selectZone(this)">Left Sleeve ↕</button>
+          <button class="placement-btn" data-place="right_sleeve" onclick="selectZone(this)">Right Sleeve ↕</button>
+        </div>
+        <div id="sleeveNote" hidden style="font-size:0.7rem;color:var(--muted);margin-top:2px;margin-bottom:6px;line-height:1.4;">
+          Sleeve print runs vertically — rotated so it reads wrist to shoulder.
+        </div>
+        <!-- Toggle: logo or text for this zone -->
+        <div style="display:flex;gap:8px;margin:10px 0 8px;">
+          <button class="zone-type-btn selected" id="zoneBtnText" onclick="selectZoneType('text')">✏ Text</button>
+          <button class="zone-type-btn" id="zoneBtnLogo" onclick="selectZoneType('logo')">🖼 Logo</button>
+          <button class="zone-type-btn" id="zoneBtnClear" onclick="clearCurrentZone()" style="margin-left:auto;border-color:var(--border);color:var(--muted);">✕ Clear zone</button>
+        </div>
+        <!-- Text input panel -->
+        <div id="zoneTextPanel">
+          <div class="text-fields">
+            <div>
+              <div class="text-field-label">Name / Team / Company</div>
+              <input type="text" id="companyName" class="company-input" placeholder="e.g. Trail Blazers, Smith &amp; Co." maxlength="40">
+            </div>
+            <div>
+              <div class="text-field-label">Tagline / Subtitle <span style="font-weight:400;opacity:0.7;">(optional)</span></div>
+              <input type="text" id="taglineName" class="company-input" placeholder="e.g. Lumby BC · Est. 2018" maxlength="40">
+            </div>
+          </div>
+          <div class="font-picker-label">Choose a font style</div>
+          <div class="font-picker" id="fontPicker"></div>
+          <div class="palette-label" id="paletteLabel" style="margin-top:10px;">Font colour</div>
+          <div class="palette-row" id="paletteRow">
+            <div class="palette-swatch auto-swatch selected" title="Auto (matches garment)" data-colour="auto" onclick="selectFontColour(this,'auto')"></div>
+          </div>
+          <button class="text-apply-btn" onclick="applyZoneText()">Apply Text to Preview →</button>
+        </div>
+        <!-- Logo upload panel for extra zone -->
+        <div id="zoneLogoPanel" style="display:none;">
+          <div id="zoneUploadZone" class="upload-zone" style="margin-top:4px;">
+            <input type="file" id="zoneLogoUpload" accept="image/*" style="display:none;">
+            <div class="upload-icon" style="font-size:1.2rem;">⬆</div>
+            <div class="upload-label">Drop a logo for this zone or <span class="zone-upload-link" style="color:var(--accent2);text-decoration:underline;cursor:pointer;">browse</span></div>
+            <div class="upload-hint">PNG works best · Or drag any design from Step 1 here</div>
+          </div>
+          <div id="zoneUploadPreviewRow" style="display:none;">
+            <img id="zoneUploadThumb" class="upload-thumb" src="" alt="">
+            <div class="upload-info">
+              <div id="zoneUploadName" class="upload-filename"></div>
+              <button class="upload-clear" onclick="clearZoneLogo()">✕ Remove</button>
+            </div>
+          </div>
+        </div>
+        <div class="upload-note" style="margin-top:8px;">Tip: each zone is independent — switch zones above to configure multiple locations.</div>
       </div>
     </div>
   </div>
@@ -284,9 +325,9 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
           <defs>
             <pattern id="wm" x="0" y="0" width="160" height="80" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
               <text x="0" y="24" font-family="Inter,sans-serif" font-size="11" font-weight="600"
-                fill="white" opacity="0.18" letter-spacing="1">© OKANAGAN OUTPOST</text>
+                fill="white" opacity="0.08" letter-spacing="1">© OKANAGAN OUTPOST</text>
               <text x="0" y="52" font-family="Inter,sans-serif" font-size="11" font-weight="600"
-                fill="white" opacity="0.18" letter-spacing="1">© OKANAGAN OUTPOST</text>
+                fill="white" opacity="0.08" letter-spacing="1">© OKANAGAN OUTPOST</text>
             </pattern>
           </defs>
           <rect width="300" height="340" fill="url(#wm)"/>
@@ -316,14 +357,16 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 </div>
 
 <script>
-// ── Block right-click and drag on entire page ──
+// ── Block right-click and drag on entire page (except design thumbnails which are draggable) ──
 document.addEventListener('contextmenu', e => e.preventDefault());
-document.addEventListener('dragstart',   e => e.preventDefault());
+document.addEventListener('dragstart', e => {
+  if(!e.target.closest('.design-thumb[draggable="true"]')) e.preventDefault();
+});
 
 // ── STATE ──
 // logoOffset: {x,y} in pixels relative to computed default position (drag offset)
 // logoScale: 1.0 = default size, user-adjustable
-let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null,customPlacement:null,logoOffset:{x:0,y:0},logoScale:1.0,uploadedLogoSrc:null,_textSrc:null};
+let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null,customPlacement:null,logoOffset:{x:0,y:0},logoScale:1.0,uploadedLogoSrc:null,_textSrc:null,zones:{}};
 
 const designGrid  = document.getElementById('designGrid');
 const garmentGrid = document.getElementById('garmentGrid');
@@ -412,7 +455,17 @@ const CHEST_POS = {
 DESIGNS.forEach(d => {
   const el = document.createElement('div');
   el.className = 'design-thumb';
+  el.setAttribute('draggable', 'true');
+  el.title = `Click to select · Drag into Main Logo or a Zone`;
   el.innerHTML = `<img src="${d.src}" alt="${d.name}" draggable="false"><div class="tlabel">${d.name}</div>`;
+  // HTML5 drag — carry the design id and src
+  el.addEventListener('dragstart', ev => {
+    ev.dataTransfer.effectAllowed = 'copy';
+    ev.dataTransfer.setData('text/design-id', d.id);
+    ev.dataTransfer.setData('text/design-src', d.src);
+    el.classList.add('dragging');
+  });
+  el.addEventListener('dragend', () => el.classList.remove('dragging'));
   el.addEventListener('click', () => {
     document.querySelectorAll('.design-thumb').forEach(x=>x.classList.remove('selected'));
     el.classList.add('selected');
@@ -498,25 +551,13 @@ function renderPreview(){
   garmentImg.style.display = 'block';
   noGarment.style.display = 'none';
 
-  // Re-render text canvas if colour changed
-  if(state.customText && cObj){
-    const parts = state.customText.split('\n');
-    const textSrc = renderTextToCanvas(parts[0], parts[1]||null, selectedFont, cObj.dark);
-    // If there's ALSO an uploaded logo, put text in textOverlay; else use main overlay
-    if(state.uploadedLogoSrc){
-      textOverlay.src = textSrc;
-      state._textSrc = textSrc;
-    } else {
-      state.customLogo = textSrc;
-      if(uploadThumb) uploadThumb.src = textSrc;
-      state._textSrc = null;
-    }
-  }
-
-  // Logo source: uploaded file takes priority over preset design
+  // Main logo source: uploaded file takes priority over preset design
   const logoSrc = state.uploadedLogoSrc || (dObj ? dObj.src : null);
-  // Text source: separate canvas render when logo+text both active
-  const textSrc  = state._textSrc || null;
+
+  // First active zone (for textOverlay)
+  const zoneKeys = Object.keys(state.zones);
+  const firstZone = zoneKeys.length > 0 ? state.zones[zoneKeys[0]] : null;
+  const firstZoneKey = zoneKeys.length > 0 ? zoneKeys[0] : null;
 
   // Invert for dark garments (preset designs only, not uploads)
   const isMulticolour = dObj && dObj.multicolour && !state.uploadedLogoSrc;
@@ -534,37 +575,34 @@ function renderPreview(){
     const h = garmentImg.offsetHeight || garmentImg.naturalHeight || 600;
     const shape = gObj ? gObj.id : 'pullover_hoodie';
     const dx = state.logoOffset.x, dy = state.logoOffset.y;
-
     const sc = state.logoScale || 1.0;
+
+    // Main logo — always chest centre
     if(logoSrc){
-      const placementKey = (state.uploadedLogoSrc || !state.customText) ? (state.customPlacement||'chest') : 'chest';
-      const pl = TEXT_PLACEMENT[placementKey];
-      const [lf,tf,wf,hf] = (pl && pl.pos) ? pl.pos : (CHEST_POS[shape]||CHEST_POS.pullover_hoodie);
-      const rot = (pl && pl.rotate) ? pl.rotate : 0;
+      const [lf,tf,wf,hf] = CHEST_POS[shape]||CHEST_POS.pullover_hoodie;
       overlay.src = logoSrc;
       overlay.style.display = 'block';
-      applyOverlayPos(overlay, lf, tf, wf, hf, w, h, rot, dx, dy, sc);
+      applyOverlayPos(overlay, lf, tf, wf, hf, w, h, 0, dx, dy, sc);
     } else {
       overlay.style.display = 'none';
     }
 
-    // Text overlay — positioned below the logo when both active
-    if(textSrc){
-      const pl = TEXT_PLACEMENT[state.customPlacement||'chest'];
-      const [lf,tf,wf,hf] = (pl && pl.pos) ? pl.pos : (CHEST_POS[shape]||CHEST_POS.pullover_hoodie);
-      textOverlay.src = textSrc;
-      textOverlay.style.display = 'block';
-      applyOverlayPos(textOverlay, lf, tf + hf + 0.01, wf, hf*0.45, w, h, 0, dx, 0, 1.0);
-    } else if(!logoSrc && state.customLogo){
-      // Text-only path: render in main overlay
-      const placementKey = state.customPlacement || 'chest';
-      const pl = TEXT_PLACEMENT[placementKey];
-      const [lf,tf,wf,hf] = (pl && pl.pos) ? pl.pos : (CHEST_POS[shape]||CHEST_POS.pullover_hoodie);
+    // First zone in textOverlay
+    if(firstZone){
+      const pl = TEXT_PLACEMENT[firstZoneKey];
+      const pos = pl && pl.pos ? pl.pos : (CHEST_POS[shape]||CHEST_POS.pullover_hoodie);
+      const [lf,tf,wf,hf] = pos;
       const rot = (pl && pl.rotate) ? pl.rotate : 0;
-      overlay.src = state.customLogo;
-      overlay.style.display = 'block';
-      applyOverlayPos(overlay, lf, tf, wf, hf, w, h, rot, dx, dy, sc);
-      textOverlay.style.display = 'none';
+      // Re-render text zones when colour changes
+      let src = firstZone.src;
+      if(firstZone.type === 'text' && cObj){
+        const parts = firstZone.text.split('\n');
+        src = renderTextToCanvas(parts[0], parts[1]||null, selectedFont, cObj.dark);
+        firstZone.src = src;
+      }
+      textOverlay.src = src;
+      textOverlay.style.display = 'block';
+      applyOverlayPos(textOverlay, lf, tf, wf, hf, w, h, rot, 0, 0, 1.0);
     } else {
       textOverlay.style.display = 'none';
     }
@@ -573,8 +611,8 @@ function renderPreview(){
   if(garmentImg.complete && garmentImg.naturalWidth > 0) doPosition();
   else garmentImg.onload = doPosition;
 
-  // Show size slider when anything is actively being displayed
-  const hasActive = !!(state.uploadedLogoSrc || state.customLogo || state.design);
+  // Show size slider when a main logo is being displayed
+  const hasActive = !!(state.uploadedLogoSrc || state.design);
   if(typeof logoSizeRow !== 'undefined') logoSizeRow.style.display = hasActive ? 'block' : 'none';
 
   updateSummary(dObj,gObj,cObj); updateBtn();
@@ -583,7 +621,7 @@ function renderPreview(){
 function updateSummary(d,g,c){
   if(!c){ summary.innerHTML='Pick a design, garment &amp; colour to preview.'; return; }
   let t = '';
-  if(state.customLogo){
+  if(state.uploadedLogoSrc){
     t += `<strong>${state.customLogoName || 'Your Logo'}</strong> <span style="font-size:0.7rem;background:var(--accent2);color:#fff;padding:1px 7px;border-radius:10px;vertical-align:middle;">YOUR LOGO</span> on `;
   } else if(d) {
     t += `<strong>${d.name}</strong> on `;
@@ -591,11 +629,15 @@ function updateSummary(d,g,c){
   t += `<strong>${c.name}`;
   if(g) t += ` ${g.name}`;
   t += '</strong>';
+  const zoneCount = Object.keys(state.zones).length;
+  if(zoneCount > 0){
+    t += `<br><span style="font-size:0.72rem;color:var(--muted);">+ ${zoneCount} extra print zone${zoneCount>1?'s':''}</span>`;
+  }
   summary.innerHTML = t;
 }
 
 function updateBtn(){
-  const hasLogo = state.design || state.customLogo;
+  const hasLogo = state.design || state.uploadedLogoSrc || Object.keys(state.zones).length > 0;
   orderBtn.disabled = !(hasLogo && state.garment && state.colour);
 }
 
@@ -603,14 +645,14 @@ function placeOrder(){
   const g = GARMENTS.find(x=>x.id===state.garment);
   const c = COLOURS.find(x=>x.id===state.colour);
   let logoDesc;
-  if(state.customLogo){
-    logoDesc = state.customText
-      ? `Text logo: "${state.customText}"`
-      : `Custom logo upload: ${state.customLogoName || 'uploaded file'}`;
+  if(state.uploadedLogoSrc){
+    logoDesc = `Custom logo upload: ${state.customLogoName || 'uploaded file'}`;
   } else {
     const d = DESIGNS.find(x=>x.id===state.design);
     logoDesc = d ? d.name : 'No design';
   }
+  const zoneDescs = Object.entries(state.zones).map(([k,v]) => `${k}:${v.type==='text'?v.text:'logo'}`);
+  if(zoneDescs.length) logoDesc += ` | Zones: ${zoneDescs.join(', ')}`;
   const msg = encodeURIComponent(`Custom order: ${logoDesc} on ${c.name} ${g.name}`);
   window.open(`https://okanagan-outpost.square.site?note=${msg}`, '_blank');
 }
@@ -633,12 +675,20 @@ const companyInput = document.getElementById('companyName');
 uploadZone.addEventListener('click', () => logoUpload.click());
 document.querySelector('.upload-link').addEventListener('click', e => { e.stopPropagation(); logoUpload.click(); });
 
-// Drag-and-drop
+// Drag-and-drop (files OR design thumbnails from Step 1)
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
 uploadZone.addEventListener('drop', e => {
   e.preventDefault();
   uploadZone.classList.remove('drag-over');
+  // Design thumbnail drag?
+  const designId  = e.dataTransfer.getData('text/design-id');
+  const designSrc = e.dataTransfer.getData('text/design-src');
+  if(designId && designSrc){
+    loadDesignAsLogo(designId, designSrc);
+    return;
+  }
+  // File drag
   const file = e.dataTransfer.files[0];
   if(file && file.type.startsWith('image/')) loadCustomLogo(file);
 });
@@ -735,6 +785,7 @@ function removeBackground(){
     ctx.putImageData(imgData,0,0);
     const result = canvas.toDataURL('image/png');
     state.customLogo = result;
+    state.uploadedLogoSrc = result;
     uploadThumb.src = result;
     document.getElementById('bgWarnBanner').hidden = true;
     extractAndShowPalette(canvas);
@@ -751,33 +802,52 @@ function rgbToHex(r,g,b){ return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0
 
 function extractDominantColours(canvas, count=6){
   const ctx = canvas.getContext('2d');
-  const w = Math.min(canvas.width, 120), h = Math.min(canvas.height, 120);
+  const w = Math.min(canvas.width, 150), h = Math.min(canvas.height, 150);
   const tmp = document.createElement('canvas');
   tmp.width=w; tmp.height=h;
   tmp.getContext('2d').drawImage(canvas,0,0,w,h);
   const data = tmp.getContext('2d').getImageData(0,0,w,h).data;
-  // Collect opaque pixels quantised to 16-step buckets (finer than 32 to catch saturated colours like orange)
-  const buckets = {};
+
+  // Two passes: first collect all opaque pixels
+  const pixels = [];
   for(let i=0;i<data.length;i+=4){
-    if(data[i+3]<128) continue; // skip transparent
-    const r=data[i]>>4, g=data[i+1]>>4, b=data[i+2]>>4;
-    const key=`${r},${g},${b}`;
-    if(!buckets[key]) buckets[key]={r:0,g:0,b:0,n:0,key};
-    buckets[key].r+=data[i]; buckets[key].g+=data[i+1];
-    buckets[key].b+=data[i+2]; buckets[key].n++;
+    if(data[i+3]<128) continue;
+    pixels.push([data[i], data[i+1], data[i+2]]);
   }
-  // Sort by frequency
-  const sorted = Object.values(buckets).sort((a,b)=>b.n-a.n);
-  // Pick top N that are visually distinct from each other (lower threshold → catches more colours)
+  if(!pixels.length) return [];
+
+  // Use 16-step buckets
+  const buckets = {};
+  for(const [r,g,b] of pixels){
+    const key=`${r>>4},${g>>4},${b>>4}`;
+    if(!buckets[key]) buckets[key]={r:0,g:0,b:0,n:0};
+    buckets[key].r+=r; buckets[key].g+=g; buckets[key].b+=b; buckets[key].n++;
+  }
+
+  // Compute avg colour + saturation for each bucket
+  const entries = Object.values(buckets).map(b => {
+    const r=b.r/b.n, g=b.g/b.n, bl=b.b/b.n;
+    // HSL saturation
+    const mx=Math.max(r,g,bl)/255, mn=Math.min(r,g,bl)/255;
+    const l=(mx+mn)/2;
+    const s = mx===mn ? 0 : l>0.5 ? (mx-mn)/(2-mx-mn) : (mx-mn)/(mx+mn);
+    // Boost score for saturated colours so orange/red/blue surface over grey
+    const score = b.n * (1 + s*3);
+    return {avg:[Math.round(r),Math.round(g),Math.round(bl)], score, n:b.n, s};
+  });
+
+  // Sort by boosted score
+  entries.sort((a,b)=>b.score-a.score);
+
+  // Pick top N visually distinct (lower threshold = 22)
   const picked = [];
-  for(const bucket of sorted){
-    const avg = [Math.round(bucket.r/bucket.n), Math.round(bucket.g/bucket.n), Math.round(bucket.b/bucket.n)];
-    if(picked.every(p=>colourDistance(p,avg)>25)){
-      picked.push(avg);
+  for(const e of entries){
+    if(picked.every(p=>colourDistance(p.avg,e.avg)>22)){
+      picked.push(e);
       if(picked.length>=count) break;
     }
   }
-  return picked.map(([r,g,b])=>rgbToHex(r,g,b));
+  return picked.map(e=>rgbToHex(...e.avg));
 }
 
 function selectFontColour(el, colour){
@@ -882,6 +952,36 @@ function clearCustomLogo(){
   renderPreview();
 }
 
+// Load a preset design as the main logo (drag from Step 1 into upload zone)
+function loadDesignAsLogo(designId, designSrc){
+  const d = DESIGNS.find(x=>x.id===designId);
+  if(!d) return;
+  state.uploadedLogoSrc = designSrc;
+  state.customLogo = designSrc;
+  state.customLogoName = d.name;
+  state.design = null; // deselect preset (it's now acting as custom logo)
+  state.logoOffset = {x:0, y:0};
+  state.logoScale = 1.0;
+  _rawLogoDataUrl = designSrc;
+  document.querySelectorAll('.design-thumb').forEach(x=>x.classList.remove('selected'));
+  uploadThumb.src = designSrc;
+  uploadNameEl.textContent = d.name;
+  uploadPrevRow.style.display = 'flex';
+  uploadZone.style.display = 'none';
+  document.getElementById('bgWarnBanner').hidden = true;
+  document.getElementById('logoSizeRow').style.display = 'block';
+  // Extract palette from this design
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width=img.naturalWidth; c.height=img.naturalHeight;
+    c.getContext('2d').drawImage(img,0,0);
+    extractAndShowPalette(c);
+  };
+  img.src = designSrc;
+  renderPreview();
+}
+
 // ── Font picker ──────────────────────────────────────────────────────────────
 const FONTS = [
   {id:'oswald',    label:'Oswald',           css:"'Oswald', sans-serif",        weight:'700'},
@@ -894,7 +994,8 @@ const FONTS = [
   {id:'elite',     label:'Special Elite',     css:"'Special Elite', cursive",    weight:'400'},
 ];
 let selectedFont = FONTS[0];
-let selectedPlacement = 'chest';
+let selectedPlacement = 'left_chest';
+let _activeZoneType = 'text';
 
 const fontPickerEl = document.getElementById('fontPicker');
 FONTS.forEach((f,i) => {
@@ -924,7 +1025,9 @@ function liveUpdateFontPreviews(){
 companyInput.addEventListener('input', liveUpdateFontPreviews);
 taglineInput.addEventListener('input', liveUpdateFontPreviews);
 
-function selectPlacement(btn){
+function selectPlacement(btn){ selectZone(btn); }
+
+function selectZone(btn){
   selectedPlacement = btn.dataset.place;
   state.customPlacement = selectedPlacement;
   state.logoOffset = {x:0, y:0};
@@ -932,9 +1035,115 @@ function selectPlacement(btn){
   btn.classList.add('selected');
   const isSleeve = selectedPlacement === 'left_sleeve' || selectedPlacement === 'right_sleeve';
   document.getElementById('sleeveNote').hidden = !isSleeve;
-  if(state.customText) applyTextLogo();
-  else renderPreview();
+  // Load existing zone config if any
+  const existing = state.zones[selectedPlacement];
+  if(existing){
+    selectZoneType(existing.type, true);
+    if(existing.type === 'logo'){
+      const thumb = document.getElementById('zoneUploadThumb');
+      const prevRow = document.getElementById('zoneUploadPreviewRow');
+      const nameEl = document.getElementById('zoneUploadName');
+      if(thumb) thumb.src = existing.src;
+      if(prevRow) prevRow.style.display = 'flex';
+      document.getElementById('zoneUploadZone').style.display = 'none';
+      if(nameEl) nameEl.textContent = existing.name || 'Zone logo';
+    }
+  } else {
+    // Reset zone UI
+    selectZoneType(_activeZoneType, true);
+    document.getElementById('zoneUploadPreviewRow').style.display = 'none';
+    document.getElementById('zoneUploadZone').style.display = '';
+  }
+  renderPreview();
 }
+
+function selectZoneType(type, silent){
+  _activeZoneType = type;
+  document.getElementById('zoneBtnText').classList.toggle('selected', type==='text');
+  document.getElementById('zoneBtnLogo').classList.toggle('selected', type==='logo');
+  document.getElementById('zoneTextPanel').style.display = type==='text' ? '' : 'none';
+  document.getElementById('zoneLogoPanel').style.display = type==='logo' ? '' : 'none';
+}
+
+function applyZoneText(){
+  const txt = companyInput.value.trim();
+  if(!txt) return;
+  const tagline = taglineInput.value.trim();
+  const cObj = COLOURS.find(c=>c.id===state.colour);
+  const isDark = cObj ? cObj.dark : false;
+  const src = renderTextToCanvas(txt, tagline||null, selectedFont, isDark);
+  state.zones[selectedPlacement] = {type:'text', src, text: txt + (tagline ? '\n'+tagline : '')};
+  renderPreview();
+}
+
+// alias so existing calls still work
+function applyTextLogo(){ applyZoneText(); }
+
+function clearCurrentZone(){
+  delete state.zones[selectedPlacement];
+  document.getElementById('zoneUploadPreviewRow').style.display = 'none';
+  document.getElementById('zoneUploadZone').style.display = '';
+  renderPreview();
+}
+
+function clearZoneLogo(){
+  delete state.zones[selectedPlacement];
+  document.getElementById('zoneUploadPreviewRow').style.display = 'none';
+  document.getElementById('zoneUploadZone').style.display = '';
+  renderPreview();
+}
+
+// Zone logo file upload
+(function(){
+  const inp = document.getElementById('zoneLogoUpload');
+  const zone = document.getElementById('zoneUploadZone');
+  const link = zone ? zone.querySelector('.zone-upload-link') : null;
+  if(inp){
+    inp.addEventListener('change', e => handleZoneLogoFile(e.target.files[0]));
+  }
+  if(zone){
+    zone.addEventListener('click', () => inp && inp.click());
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('drag-over');
+      // Design thumbnail drag?
+      const designId  = e.dataTransfer.getData('text/design-id');
+      const designSrc = e.dataTransfer.getData('text/design-src');
+      if(designId && designSrc){
+        const d = DESIGNS.find(x=>x.id===designId);
+        state.zones[selectedPlacement] = {type:'logo', src:designSrc, name: d ? d.name : designId};
+        const thumb = document.getElementById('zoneUploadThumb');
+        const prevRow = document.getElementById('zoneUploadPreviewRow');
+        const nameEl = document.getElementById('zoneUploadName');
+        if(thumb) thumb.src = designSrc;
+        if(prevRow) prevRow.style.display = 'flex';
+        if(nameEl) nameEl.textContent = d ? d.name : designId;
+        zone.style.display = 'none';
+        renderPreview();
+        return;
+      }
+      if(e.dataTransfer.files[0]) handleZoneLogoFile(e.dataTransfer.files[0]);
+    });
+  }
+  function handleZoneLogoFile(file){
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const src = ev.target.result;
+      state.zones[selectedPlacement] = {type:'logo', src, name: file.name};
+      const thumb = document.getElementById('zoneUploadThumb');
+      const prevRow = document.getElementById('zoneUploadPreviewRow');
+      const nameEl = document.getElementById('zoneUploadName');
+      if(thumb) thumb.src = src;
+      if(prevRow) prevRow.style.display = 'flex';
+      if(nameEl) nameEl.textContent = file.name;
+      document.getElementById('zoneUploadZone').style.display = 'none';
+      renderPreview();
+    };
+    reader.readAsDataURL(file);
+  }
+})();
 
 // Placement → CHEST_POS-style [leftFrac, topFrac, widthFrac, heightFrac] + optional rotate (degrees)
 const TEXT_PLACEMENT = {
@@ -983,37 +1192,8 @@ function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment){
   return canvas.toDataURL('image/png');
 }
 
-function applyTextLogo(){
-  const txt = companyInput.value.trim();
-  if(!txt) return;
-  const tagline = taglineInput.value.trim();
-  const cObj = COLOURS.find(c=>c.id===state.colour);
-  const isDark = cObj ? cObj.dark : false;
-  state.customText = txt + (tagline ? '\n'+tagline : '');
-  state.customPlacement = selectedPlacement;
-  const textCanvas = renderTextToCanvas(txt, tagline||null, selectedFont, isDark);
-  if(state.uploadedLogoSrc){
-    // Two-overlay mode: uploaded logo stays in #designOverlay, text goes in #textOverlay
-    state._textSrc = textCanvas;
-    // Keep state.customLogo pointing at uploaded logo (for order summary)
-    uploadNameEl.textContent = state.customLogoName + ' + text';
-  } else {
-    // Text-only mode
-    state._textSrc = null;
-    state.customLogo = textCanvas;
-    state.customLogoName = txt + (tagline ? ' · '+tagline : '');
-    state.design = null;
-    document.querySelectorAll('.design-thumb').forEach(x => x.classList.remove('selected'));
-    uploadThumb.src = textCanvas;
-    uploadNameEl.textContent = state.customLogoName;
-    uploadPrevRow.style.display = 'flex';
-    uploadZone.style.display = 'none';
-  }
-  renderPreview();
-}
-
-companyInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyTextLogo(); });
-taglineInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyTextLogo(); });
+companyInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyZoneText(); });
+taglineInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyZoneText(); });
 
 // ── Logo scale slider ─────────────────────────────────────────────────────────
 logoScaleSlider.addEventListener('input', () => {
