@@ -71,7 +71,9 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 .preview-title{font-family:'Playfair Display',serif;font-size:1rem;color:var(--accent);text-align:center;}
 
 /* Preview wrap — watermark lives here */
-#previewWrap{width:100%;max-width:300px;position:relative;border-radius:12px;overflow:hidden;}
+#previewWrap{width:100%;max-width:300px;position:relative;border-radius:12px;}
+/* overflow:hidden removed — rotated sleeve overlays need to extend beyond the box */
+#previewWrap>svg{border-radius:12px;overflow:hidden;}
 #previewWrap svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.22));}
 #designOverlay{position:absolute;object-fit:contain;-webkit-user-drag:none;image-rendering:auto;
   cursor:grab;touch-action:none;z-index:2;}
@@ -80,7 +82,6 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 /* Zone overlays are created dynamically — shared base style */
 .zone-overlay{position:absolute;object-fit:contain;-webkit-user-drag:none;cursor:grab;touch-action:none;z-index:3;}
 .zone-overlay:active{cursor:grabbing;}
-.zone-overlay.zone-selected{outline:2px dashed var(--accent2);outline-offset:2px;}
 .zone-overlay.zone-inactive{pointer-events:none;z-index:2;} /* non-selected zones don't intercept */
 /* Drag handle hint */
 #dragHint{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
@@ -391,7 +392,45 @@ document.addEventListener('dragstart', e => {
 // ── STATE ──
 // logoOffset: {x,y} in pixels relative to computed default position (drag offset)
 // logoScale: 1.0 = default size, user-adjustable
-let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null,customPlacement:null,logoOffset:{x:0,y:0},logoScale:1.0,uploadedLogoSrc:null,_textSrc:null,zones:{}};
+let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null,customPlacement:null,logoOffset:{x:0,y:0},logoScale:1.0,uploadedLogoSrc:null,_textSrc:null,zones:{},_zoneRotations:{}};
+
+function saveState(){
+  try{
+    const toSave = {
+      design: state.design,
+      garment: state.garment,
+      colour: state.colour,
+      logoOffset: state.logoOffset,
+      logoScale: state.logoScale,
+      customLogoName: state.customLogoName,
+      uploadedLogoSrc: state.uploadedLogoSrc,
+      zones: state.zones,
+      _zoneRotations: state._zoneRotations
+    };
+    sessionStorage.setItem('oo_state', JSON.stringify(toSave));
+  } catch(e){ /* quota exceeded or private mode — ignore */ }
+}
+
+function restoreState(){
+  try{
+    const raw = sessionStorage.getItem('oo_state');
+    if(!raw) return false;
+    const saved = JSON.parse(raw);
+    if(saved.garment) state.garment = saved.garment;
+    if(saved.colour)  state.colour  = saved.colour;
+    if(saved.design)  state.design  = saved.design;
+    if(saved.logoOffset) state.logoOffset = saved.logoOffset;
+    if(saved.logoScale != null) state.logoScale = saved.logoScale;
+    if(saved.customLogoName) state.customLogoName = saved.customLogoName;
+    if(saved.zones && Object.keys(saved.zones).length) state.zones = saved.zones;
+    if(saved._zoneRotations) state._zoneRotations = saved._zoneRotations;
+    if(saved.uploadedLogoSrc){
+      state.uploadedLogoSrc = saved.uploadedLogoSrc;
+      state.customLogo = saved.uploadedLogoSrc; // treat as active logo src
+    }
+    return !!(state.garment && state.colour);
+  } catch(e){ return false; }
+}
 
 const designGrid  = document.getElementById('designGrid');
 const garmentGrid = document.getElementById('garmentGrid');
@@ -516,6 +555,7 @@ DESIGNS.forEach(d => {
   const el = document.createElement('div');
   el.className = 'design-thumb';
   el.setAttribute('draggable', 'true');
+  el.dataset.id = d.id;
   el.title = `Click to select · Drag into Main Logo or a Zone`;
   el.innerHTML = `<img src="${d.src}" alt="${d.name}" draggable="false"><div class="tlabel">${d.name}</div>`;
   // HTML5 drag — carry the design id and src
@@ -544,6 +584,7 @@ DESIGNS.forEach(d => {
 GARMENTS.forEach(g => {
   const el = document.createElement('div');
   el.className = 'garment-btn';
+  el.dataset.id = g.id;
   el.textContent = g.label;
   el.addEventListener('click', () => {
     document.querySelectorAll('.garment-btn').forEach(x=>x.classList.remove('selected'));
@@ -558,6 +599,7 @@ GARMENTS.forEach(g => {
 COLOURS.forEach(c => {
   const el = document.createElement('div');
   el.className = 'colour-swatch';
+  el.dataset.id = c.id;
   el.style.background = c.hex;
   if(c.id==='white'||c.id==='sand'||c.id==='gold'||c.id==='caramel'){
     el.style.border = '2px solid var(--border)';
@@ -657,7 +699,8 @@ function renderPreview(){
       let src = zone.src;
       if(zone.type === 'text' && cObj){
         const parts = zone.text.split('\n');
-        src = renderTextToCanvas(parts[0], parts[1]||null, selectedFont, cObj.dark);
+        const isSleeve = zKey === 'left_sleeve' || zKey === 'right_sleeve';
+        src = renderTextToCanvas(parts[0], parts[1]||null, selectedFont, cObj.dark, isSleeve);
         zone.src = src;
       }
 
@@ -699,6 +742,7 @@ function renderPreview(){
   if(typeof logoSizeRow !== 'undefined') logoSizeRow.style.display = hasActive ? 'block' : 'none';
 
   updateSummary(dObj,gObj,cObj); updateBtn();
+  saveState();
 }
 
 function updateSummary(d,g,c){
@@ -743,7 +787,50 @@ function placeOrder(){
 window.addEventListener('resize', () => {
   if(state.garment && state.colour) renderPreview();
 });
-renderPreview();
+
+// ── Restore persisted session state ──────────────────────────────────────────
+(function(){
+  const restored = restoreState();
+  if(restored){
+    // Re-select garment button
+    if(state.garment){
+      document.querySelectorAll('.garment-btn').forEach(btn => {
+        if(btn.dataset.id===state.garment) btn.classList.add('selected');
+      });
+    }
+    // Re-select colour swatch
+    if(state.colour){
+      document.querySelectorAll('.colour-swatch').forEach(el => {
+        if(el.dataset.id===state.colour){
+          el.classList.add('selected');
+          const c = COLOURS.find(x=>x.id===state.colour);
+          if(c) colourLabel.textContent = c.name;
+        }
+      });
+    }
+    // Re-select design thumb
+    if(state.design){
+      document.querySelectorAll('.design-thumb').forEach(el => {
+        if(el.dataset && el.dataset.id===state.design) el.classList.add('selected');
+      });
+    }
+    // Show upload preview row if logo was uploaded
+    if(state.uploadedLogoSrc && typeof uploadPrevRow!=='undefined'){
+      uploadPrevRow.style.display = '';
+      if(typeof uploadZone!=='undefined') uploadZone.style.display = 'none';
+      const prevImg = document.getElementById('uploadPreview');
+      if(prevImg) prevImg.src = state.uploadedLogoSrc;
+      const nameEl = document.getElementById('uploadedFileName');
+      if(nameEl) nameEl.textContent = state.customLogoName || 'Uploaded logo';
+    }
+    // Restore logo scale slider
+    if(typeof logoScaleSlider!=='undefined' && state.logoScale != null){
+      logoScaleSlider.value = Math.round(state.logoScale * 100);
+      if(typeof logoScaleLabel!=='undefined') logoScaleLabel.textContent = logoScaleSlider.value + '%';
+    }
+  }
+  renderPreview();
+})();
 
 // ── Custom Logo Upload ──
 const uploadZone   = document.getElementById('uploadZone');
@@ -1188,7 +1275,8 @@ function applyZoneText(){
   const tagline = taglineInput.value.trim();
   const cObj = COLOURS.find(c=>c.id===state.colour);
   const isDark = cObj ? cObj.dark : false;
-  const src = renderTextToCanvas(txt, tagline||null, selectedFont, isDark);
+  const isSleeve = selectedPlacement === 'left_sleeve' || selectedPlacement === 'right_sleeve';
+  const src = renderTextToCanvas(txt, tagline||null, selectedFont, isDark, isSleeve);
   const existing = state.zones[selectedPlacement];
   const defaultRot = selectedPlacement === 'left_sleeve' ? -90 : selectedPlacement === 'right_sleeve' ? 90 : 0;
   const storedRot = existing ? existing.rotation : (state._zoneRotations && state._zoneRotations[selectedPlacement]);
@@ -1283,15 +1371,21 @@ const TEXT_PLACEMENT = {
   // CSS height = 0.26×300 = 78px, half = 39px.
   // Left:  lf=0.12 → left=36, center_x=36+0.07×300=36+21=57, 57-39=18px clear ✓
   // Right: lf=0.74 → left=222, center_x=222+21=243, 300-243-39=18px clear ✓
-  // Sleeve: CSS height = garment height (1.0) so rotated text can fill the full arm length.
-  // With -90/90 rotation, visual print width = CSS height = full garment height.
-  // wf=0.18 is the sleeve column width; lf centres it on each arm.
-  left_sleeve: {pos: [0.05, 0.00, 0.18, 1.00], rotate: -90},
-  right_sleeve:{pos: [0.77, 0.00, 0.18, 1.00], rotate:  90},
+  // Sleeve: wf=sleeve column width, hf=arm length as fraction of garment height.
+  // After -90/+90 rotation: visual width = CSS hf*h, visual height = CSS wf*w.
+  // Centre placed on the sleeve arm column, vertically centred on the upper arm.
+  // hf=0.85 → visual print width spans 85% of garment height (nearly full arm).
+  // wf=0.20 → visual print height = sleeve column width.
+  left_sleeve: {pos: [0.07, 0.08, 0.20, 0.85], rotate: -90},
+  right_sleeve:{pos: [0.73, 0.08, 0.20, 0.85], rotate:  90},
 };
 
-function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment){
-  const W = 600, H = tagline ? 220 : 160;
+function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment, forSleeve){
+  // For sleeve zones: canvas is portrait (tall & narrow) so object-fit:contain fills the
+  // tall narrow CSS element, and after rotation the text reads across the arm at full size.
+  // For other zones: landscape canvas as before.
+  const W = forSleeve ? 200 : 600;
+  const H = forSleeve ? 700 : (tagline ? 220 : 160);
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
@@ -1304,11 +1398,26 @@ function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment){
   ctx.textAlign = 'center';
   const fam = fontObj ? fontObj.css : "'Oswald', sans-serif";
   const wt  = fontObj ? fontObj.weight : '700';
-  // Main text
-  let fs = tagline ? 72 : 84;
+  // Main text — for sleeve, start big and scale down to fit width
+  let fs = forSleeve ? 100 : (tagline ? 72 : 84);
   ctx.font = `${wt} ${fs}px ${fam}`;
-  while(ctx.measureText(mainTxt).width > W-40 && fs > 16) { fs-=2; ctx.font=`${wt} ${fs}px ${fam}`; }
-  if(tagline){
+  while(ctx.measureText(mainTxt).width > W-16 && fs > 16) { fs-=2; ctx.font=`${wt} ${fs}px ${fam}`; }
+  if(forSleeve){
+    // Centre the text vertically in the tall canvas
+    ctx.textBaseline = 'middle';
+    ctx.fillText(mainTxt, W/2, H/2);
+    if(tagline){
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(mainTxt, W/2, H/2 - fs*0.3);
+      let ts = Math.min(fs*0.48, 48);
+      const tagFam = "'Inter', sans-serif";
+      ctx.font = `500 ${ts}px ${tagFam}`;
+      while(ctx.measureText(tagline).width > W-16 && ts > 12) { ts-=1; ctx.font=`500 ${ts}px ${tagFam}`; }
+      ctx.fillStyle = (selectedFontColour && selectedFontColour !== 'auto')
+        ? selectedFontColour + 'cc' : (darkGarment ? 'rgba(255,255,255,0.82)' : 'rgba(26,26,26,0.72)');
+      ctx.fillText(tagline, W/2, H/2 + ts*0.8);
+    }
+  } else if(tagline){
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(mainTxt, W/2, fs+8);
     // Tagline
