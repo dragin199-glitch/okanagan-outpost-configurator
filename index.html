@@ -71,10 +71,8 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 .preview-title{font-family:'Playfair Display',serif;font-size:1rem;color:var(--accent);text-align:center;}
 
 /* Preview wrap — watermark lives here */
-#previewWrap{width:100%;max-width:300px;position:relative;border-radius:12px;
-  /* No overflow:hidden — zone overlays (sleeves) may extend slightly; clip handled per-element */}
+#previewWrap{width:100%;max-width:300px;position:relative;border-radius:12px;overflow:hidden;}
 #previewWrap svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.22));}
-#garmentImg{border-radius:8px;}
 #designOverlay{position:absolute;object-fit:contain;-webkit-user-drag:none;image-rendering:auto;
   cursor:grab;touch-action:none;}
 #designOverlay:active{cursor:grabbing;}
@@ -1194,11 +1192,11 @@ const TEXT_PLACEMENT = {
   left_chest:  {pos: [0.10, 0.30, 0.22, 0.18]},
   name_tag:    {pos: [0.12, 0.26, 0.28, 0.08]},         // small strip upper-left
   back:        {pos: [0.15, 0.25, 0.70, 0.55]},
-  // Sleeve positions: centred on sleeve area in flat-lay, rotated vertically
-  // left sleeve in photo = right side of image (viewer's right); right sleeve = left side
-  // Using positions that land on the sleeve fabric in a typical flat-lay
-  left_sleeve: {pos: [0.02, 0.35, 0.13, 0.32], rotate: -90},
-  right_sleeve:{pos: [0.85, 0.35, 0.13, 0.32], rotate:  90},
+  // Sleeve positions: upper-arm area visible in front flat-lay, rotated vertically
+  // In a typical flat-lay hoodie photo the sleeve fabric runs along the sides
+  // These coords keep the text within the visible garment area
+  left_sleeve: {pos: [0.05, 0.32, 0.14, 0.30], rotate: -90},
+  right_sleeve:{pos: [0.81, 0.32, 0.14, 0.30], rotate:  90},
 };
 
 function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment){
