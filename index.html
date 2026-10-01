@@ -375,7 +375,7 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
       <span style="font-size:0.7rem;opacity:0.8;">Tawnya — add to your to-do list!</span>
     </div>
     <button class="order-btn" id="orderBtn" disabled onclick="placeOrder()">Order This →</button>
-    <div class="note">You'll be taken to our store to complete your order. Custom requests are confirmed by Tanya within 24 hrs.</div>
+    <div class="note">You'll be taken to our store to complete your order. Custom requests are confirmed by Outpost team within 24 hrs.</div>
   </div>
 <!-- Preview zoom modal -->
 <div id="zoomModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:1000;
@@ -1408,8 +1408,8 @@ const TEXT_PLACEMENT = {
   // Centre placed on the sleeve arm column, vertically centred on the upper arm.
   // hf=0.85 → visual print width spans 85% of garment height (nearly full arm).
   // wf=0.20 → visual print height = sleeve column width.
-  left_sleeve: {pos: [0.07, 0.08, 0.20, 0.85], rotate: -90},
-  right_sleeve:{pos: [0.73, 0.08, 0.20, 0.85], rotate:  90},
+  left_sleeve: {pos: [0.07, 0.08, 0.20, 0.85], rotate: -78},
+  right_sleeve:{pos: [0.73, 0.08, 0.20, 0.85], rotate:  78},
 };
 
 function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment, forSleeve){
@@ -1486,8 +1486,13 @@ const zoneSizeRow     = document.getElementById('zoneSizeRow');
 zoneScaleSlider.addEventListener('input', () => {
   const zone = state.zones[selectedPlacement];
   if(!zone) return;
-  zone.scale = parseInt(zoneScaleSlider.value) / 100;
+  const newScale = parseInt(zoneScaleSlider.value) / 100;
+  zone.scale = newScale;
   zoneScaleLabel.textContent = zoneScaleSlider.value + '%';
+  // Sync opposite sleeve size
+  const opposite = selectedPlacement === 'left_sleeve' ? 'right_sleeve' :
+                   selectedPlacement === 'right_sleeve' ? 'left_sleeve' : null;
+  if(opposite && state.zones[opposite]) state.zones[opposite].scale = newScale;
   renderPreview();
 });
 
