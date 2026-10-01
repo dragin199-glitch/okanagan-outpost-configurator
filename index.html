@@ -1,5 +1,5 @@
 <title>Design Your Own – Okanagan Outpost</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@300;400;500;600&family=Oswald:wght@700&family=Bebas+Neue&family=Permanent+Marker&family=Russo+One&family=Montserrat:wght@800&family=Lobster&family=Roboto+Condensed:wght@700&family=Special+Elite&display=swap">
 <style>
 :root {
   --bg:#f5f2ee;--surface:#ffffff;--surface2:#ede9e3;--fg:#1a1704;--muted:#7a7060;
@@ -105,12 +105,30 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 .upload-divider{display:flex;align-items:center;gap:10px;color:var(--muted);
   font-size:0.75rem;margin:14px 0;}
 .upload-divider::before,.upload-divider::after{content:'';flex:1;height:1px;background:var(--border);}
-.upload-text-row{display:flex;gap:8px;}
-.company-input{flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;
+/* ── Text customizer ── */
+.text-fields{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+.text-field-label{font-size:0.72rem;color:var(--muted);margin-bottom:2px;}
+.company-input{width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;
   background:var(--surface);color:var(--fg);font-family:inherit;font-size:0.85rem;}
 .company-input:focus{outline:none;border-color:var(--accent2);}
-.text-apply-btn{padding:8px 14px;background:var(--accent);color:white;border:none;
-  border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:inherit;white-space:nowrap;}
+/* Font picker */
+.font-picker-label{font-size:0.72rem;color:var(--muted);margin:10px 0 6px;}
+.font-picker{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;
+  border:1.5px solid var(--border);border-radius:8px;padding:4px;}
+.font-option{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;
+  cursor:pointer;transition:background 0.12s;border:2px solid transparent;}
+.font-option:hover{background:var(--sel-bg);}
+.font-option.selected{background:var(--sel-bg);border-color:var(--accent);}
+.font-preview{flex:1;font-size:1.1rem;color:var(--fg);line-height:1.1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.font-name-label{font-size:0.65rem;color:var(--muted);white-space:nowrap;flex-shrink:0;font-family:'Inter',sans-serif;}
+/* Placement row */
+.placement-row{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px;}
+.placement-btn{padding:5px 11px;border-radius:16px;border:1.5px solid var(--border);
+  background:var(--surface);color:var(--fg);cursor:pointer;font-size:0.75rem;font-family:inherit;}
+.placement-btn:hover{border-color:var(--accent2);}
+.placement-btn.selected{border-color:var(--accent);background:var(--sel-bg);color:var(--accent);font-weight:600;}
+.text-apply-btn{width:100%;padding:9px;background:var(--accent);color:white;border:none;
+  border-radius:8px;cursor:pointer;font-size:0.85rem;font-family:inherit;margin-top:6px;font-weight:600;}
 .text-apply-btn:hover{background:var(--accent2);}
 .upload-note{font-size:0.7rem;color:var(--muted);margin-top:10px;line-height:1.4;}
 #uploadPreviewRow{display:flex;align-items:center;gap:12px;padding:10px;
@@ -172,11 +190,26 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
             <button class="upload-clear" onclick="clearCustomLogo()">✕ Remove</button>
           </div>
         </div>
-        <div class="upload-divider"><span>or</span></div>
-        <div class="upload-text-row">
-          <input type="text" id="companyName" class="company-input" placeholder="Type your company or team name…" maxlength="40">
-          <button class="text-apply-btn" onclick="applyTextLogo()">Preview</button>
+        <div class="upload-divider"><span>or add custom text</span></div>
+        <div class="text-fields">
+          <div>
+            <div class="text-field-label">Name / Team / Company</div>
+            <input type="text" id="companyName" class="company-input" placeholder="e.g. Trail Blazers, Smith & Co." maxlength="40">
+          </div>
+          <div>
+            <div class="text-field-label">Tagline / Subtitle <span style="font-weight:400;opacity:0.7;">(optional)</span></div>
+            <input type="text" id="taglineName" class="company-input" placeholder="e.g. Lumby BC · Est. 2018" maxlength="40">
+          </div>
         </div>
+        <div class="font-picker-label">Choose a font style</div>
+        <div class="font-picker" id="fontPicker"></div>
+        <div class="font-picker-label" style="margin-top:10px;">Text placement</div>
+        <div class="placement-row" id="placementRow">
+          <button class="placement-btn selected" data-place="chest" onclick="selectPlacement(this)">Chest Centre</button>
+          <button class="placement-btn" data-place="left_chest" onclick="selectPlacement(this)">Left Chest</button>
+          <button class="placement-btn" data-place="back" onclick="selectPlacement(this)">Full Back</button>
+        </div>
+        <button class="text-apply-btn" onclick="applyTextLogo()">Apply to Preview →</button>
         <div class="upload-note">Your artwork stays on your device — it's never uploaded to our servers.</div>
       </div>
     </div>
@@ -222,7 +255,7 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('dragstart',   e => e.preventDefault());
 
 // ── STATE ──
-let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null};
+let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null,customPlacement:null};
 
 const designGrid  = document.getElementById('designGrid');
 const garmentGrid = document.getElementById('garmentGrid');
@@ -373,7 +406,8 @@ function renderPreview(){
 
   // If customer typed a text logo, re-render it in the right colour for this garment
   if(state.customText && cObj){
-    state.customLogo = renderTextToCanvas(state.customText, cObj.dark);
+    const parts = state.customText.split('\n');
+    state.customLogo = renderTextToCanvas(parts[0], parts[1]||null, selectedFont, cObj.dark);
     uploadThumb.src = state.customLogo;
   }
 
@@ -402,7 +436,10 @@ function renderPreview(){
       const w = garmentImg.offsetWidth  || garmentImg.naturalWidth  || 600;
       const h = garmentImg.offsetHeight || garmentImg.naturalHeight || 600;
       const shape = gObj ? gObj.id : 'pullover_hoodie';
-      const [lf, tf, wf, hf] = CHEST_POS[shape] || CHEST_POS.pullover_hoodie;
+      // Custom placement override for text logos
+      const placementKey = state.customPlacement || 'chest';
+      const placementPos = (state.customLogo && TEXT_PLACEMENT[placementKey]) ? TEXT_PLACEMENT[placementKey].pos : null;
+      const [lf, tf, wf, hf] = placementPos || CHEST_POS[shape] || CHEST_POS.pullover_hoodie;
       overlay.src = logoSrc;
       overlay.style.display = 'block';
       overlay.style.left   = (lf * w) + 'px';
@@ -466,6 +503,7 @@ renderPreview();
 const uploadZone   = document.getElementById('uploadZone');
 const logoUpload   = document.getElementById('logoUpload');
 const uploadPrevRow= document.getElementById('uploadPreviewRow');
+const taglineInput = document.getElementById('taglineName');
 const uploadThumb  = document.getElementById('uploadThumb');
 const uploadNameEl = document.getElementById('uploadName');
 const companyInput = document.getElementById('companyName');
@@ -512,47 +550,120 @@ function clearCustomLogo(){
   state.customLogo = null;
   state.customLogoName = null;
   state.customText = null;
+  state.customPlacement = null;
   logoUpload.value = '';
   uploadPrevRow.style.display = 'none';
   uploadZone.style.display = '';
   renderPreview();
 }
 
-function renderTextToCanvas(txt, darkGarment){
+// ── Font picker ──────────────────────────────────────────────────────────────
+const FONTS = [
+  {id:'oswald',    label:'Oswald',           css:"'Oswald', sans-serif",        weight:'700'},
+  {id:'bebas',     label:'Bebas Neue',        css:"'Bebas Neue', sans-serif",    weight:'400'},
+  {id:'montserrat',label:'Montserrat',        css:"'Montserrat', sans-serif",    weight:'800'},
+  {id:'russo',     label:'Russo One',         css:"'Russo One', sans-serif",     weight:'400'},
+  {id:'roboto',    label:'Roboto Condensed',  css:"'Roboto Condensed', sans-serif", weight:'700'},
+  {id:'lobster',   label:'Lobster',           css:"'Lobster', cursive",          weight:'400'},
+  {id:'marker',    label:'Permanent Marker',  css:"'Permanent Marker', cursive", weight:'400'},
+  {id:'elite',     label:'Special Elite',     css:"'Special Elite', cursive",    weight:'400'},
+];
+let selectedFont = FONTS[0];
+let selectedPlacement = 'chest';
+
+const fontPickerEl = document.getElementById('fontPicker');
+FONTS.forEach((f,i) => {
+  const el = document.createElement('div');
+  el.className = 'font-option' + (i===0?' selected':'');
+  el.dataset.id = f.id;
+  el.innerHTML = `<span class="font-preview" style="font-family:${f.css};font-weight:${f.weight};">${companyInput.value||'Your Text'}</span><span class="font-name-label">${f.label}</span>`;
+  el.addEventListener('click', () => {
+    selectedFont = f;
+    fontPickerEl.querySelectorAll('.font-option').forEach(x=>x.classList.remove('selected'));
+    el.classList.add('selected');
+    liveUpdateFontPreviews();
+    if(state.customText) applyTextLogo();
+  });
+  fontPickerEl.appendChild(el);
+});
+
+function liveUpdateFontPreviews(){
+  const txt = companyInput.value.trim() || 'Your Text';
+  fontPickerEl.querySelectorAll('.font-preview').forEach((el,i) => {
+    const f = FONTS[i];
+    el.textContent = txt;
+    el.style.fontFamily = f.css;
+    el.style.fontWeight = f.weight;
+  });
+}
+companyInput.addEventListener('input', liveUpdateFontPreviews);
+taglineInput.addEventListener('input', liveUpdateFontPreviews);
+
+function selectPlacement(btn){
+  selectedPlacement = btn.dataset.place;
+  document.querySelectorAll('.placement-btn').forEach(x=>x.classList.remove('selected'));
+  btn.classList.add('selected');
+  if(state.customText) applyTextLogo();
+}
+
+// Placement → CHEST_POS-style [leftFrac, topFrac, widthFrac, heightFrac]
+const TEXT_PLACEMENT = {
+  chest:      {pos: null},           // use garment's default CHEST_POS
+  left_chest: {pos: [0.28, 0.34, 0.22, 0.18]},
+  back:       {pos: [0.20, 0.30, 0.60, 0.50]},
+};
+
+function renderTextToCanvas(mainTxt, tagline, fontObj, darkGarment){
+  const W = 600, H = tagline ? 220 : 160;
   const canvas = document.createElement('canvas');
-  canvas.width = 400; canvas.height = 160;
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0,0,400,160);
-  let fontSize = 60;
-  ctx.font = `bold ${fontSize}px Inter, Arial, sans-serif`;
-  while(ctx.measureText(txt).width > 360 && fontSize > 14){
-    fontSize -= 2;
-    ctx.font = `bold ${fontSize}px Inter, Arial, sans-serif`;
-  }
-  // Use white text on dark garments, black on light ones
-  ctx.fillStyle = darkGarment ? '#ffffff' : '#1a1a1a';
+  ctx.clearRect(0,0,W,H);
+  const color = darkGarment ? '#ffffff' : '#1a1a1a';
+  ctx.fillStyle = color;
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(txt, 200, 80);
+  const fam = fontObj ? fontObj.css : "'Oswald', sans-serif";
+  const wt  = fontObj ? fontObj.weight : '700';
+  // Main text
+  let fs = tagline ? 72 : 84;
+  ctx.font = `${wt} ${fs}px ${fam}`;
+  while(ctx.measureText(mainTxt).width > W-40 && fs > 16) { fs-=2; ctx.font=`${wt} ${fs}px ${fam}`; }
+  if(tagline){
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(mainTxt, W/2, fs+8);
+    // Tagline
+    let ts = Math.min(fs*0.48, 38);
+    const tagFam = "'Inter', sans-serif";
+    ctx.font = `500 ${ts}px ${tagFam}`;
+    while(ctx.measureText(tagline).width > W-40 && ts > 12) { ts-=1; ctx.font=`500 ${ts}px ${tagFam}`; }
+    ctx.fillStyle = darkGarment ? 'rgba(255,255,255,0.82)' : 'rgba(26,26,26,0.72)';
+    ctx.fillText(tagline, W/2, fs+8+ts+10);
+  } else {
+    ctx.textBaseline = 'middle';
+    ctx.fillText(mainTxt, W/2, H/2);
+  }
   return canvas.toDataURL('image/png');
 }
 
 function applyTextLogo(){
   const txt = companyInput.value.trim();
   if(!txt) return;
+  const tagline = taglineInput.value.trim();
   const cObj = COLOURS.find(c=>c.id===state.colour);
   const isDark = cObj ? cObj.dark : false;
-  state.customText = txt;
-  state.customLogo = renderTextToCanvas(txt, isDark);
-  state.customLogoName = txt;
+  state.customText = txt + (tagline ? '\n'+tagline : '');
+  state.customLogo = renderTextToCanvas(txt, tagline||null, selectedFont, isDark);
+  state.customLogoName = txt + (tagline ? ' · '+tagline : '');
+  state.customPlacement = selectedPlacement;
   state.design = null;
   document.querySelectorAll('.design-thumb').forEach(x => x.classList.remove('selected'));
   uploadThumb.src = state.customLogo;
-  uploadNameEl.textContent = txt;
+  uploadNameEl.textContent = state.customLogoName;
   uploadPrevRow.style.display = 'flex';
   uploadZone.style.display = 'none';
   renderPreview();
 }
 
 companyInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyTextLogo(); });
+taglineInput.addEventListener('keydown', e => { if(e.key === 'Enter') applyTextLogo(); });
 </script>
