@@ -853,7 +853,11 @@ function toggleInquiryForm(){
   btn.textContent = open ? 'Cancel ✕' : 'Send Us a Message ✉️';
 }
 
-function submitInquiry(){
+// ── Inquiry backend ──────────────────────────────────────────────────────────
+// Once you deploy the Apps Script web app, paste its URL here:
+const INQUIRY_ENDPOINT = 'YOUR_APPS_SCRIPT_URL_HERE';
+
+async function submitInquiry(){
   const name    = document.getElementById('iqName').value.trim();
   const contact = document.getElementById('iqContact').value.trim();
   const message = document.getElementById('iqMessage').value.trim();
@@ -861,21 +865,34 @@ function submitInquiry(){
     alert('Please fill in all fields before sending.');
     return;
   }
-  // Build a summary of the current configuration to include with the inquiry
   const g = GARMENTS.find(x=>x.id===state.garment);
   const c = COLOURS.find(x=>x.id===state.colour);
-  const configSummary = (g && c) ? ` (Looking at: ${c.name} ${g.name})` : '';
+  const configSummary = (g && c) ? `${c.name} ${g.name}` : 'Not specified';
 
-  // Store locally so staff can see it (temporary — hook up to backend/Square later)
-  const inquiries = JSON.parse(localStorage.getItem('oo_inquiries')||'[]');
-  inquiries.push({
-    name, contact, message,
-    config: configSummary,
-    ts: new Date().toISOString()
-  });
-  try{ localStorage.setItem('oo_inquiries', JSON.stringify(inquiries)); }catch(e){}
+  const payload = { name, contact, message, config: configSummary, ts: new Date().toISOString() };
 
-  // Show thanks, hide form inputs
+  // Always save locally as a backup
+  try{
+    const inquiries = JSON.parse(localStorage.getItem('oo_inquiries')||'[]');
+    inquiries.push(payload);
+    localStorage.setItem('oo_inquiries', JSON.stringify(inquiries));
+  }catch(e){}
+
+  // Send to Apps Script (logs to Sheet + fires ntfy push notification)
+  if(INQUIRY_ENDPOINT && INQUIRY_ENDPOINT !== 'YOUR_APPS_SCRIPT_URL_HERE'){
+    try{
+      await fetch(INQUIRY_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors', // Apps Script doesn't return CORS headers by default
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+    }catch(e){
+      console.warn('Inquiry POST failed (saved locally):', e);
+    }
+  }
+
+  // Show thanks, reset form
   document.getElementById('iqThanks').hidden = false;
   document.getElementById('iqName').value = '';
   document.getElementById('iqContact').value = '';
