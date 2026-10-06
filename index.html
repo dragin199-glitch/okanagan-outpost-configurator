@@ -374,8 +374,40 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
       This multicolour design needs a white/light variant to show clearly on dark garments.<br>
       <span style="font-size:0.7rem;opacity:0.8;">Tawnya — add to your to-do list!</span>
     </div>
+    <!-- Print Type + Stalls section -->
+    <div id="printTypeWrap" style="margin-bottom:12px;display:none;">
+      <div style="font-size:0.78rem;font-weight:600;color:var(--muted);margin-bottom:6px;letter-spacing:0.03em;">PRINT METHOD</div>
+      <select id="printTypeSelect"
+        style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;
+        background:var(--surface2);color:var(--fg);font-size:0.85rem;font-family:inherit;cursor:pointer;appearance:auto;">
+        <option value="">— Select print method —</option>
+        <option value="dtf">DTF (Direct to Film) — in-house</option>
+        <option value="bertha">Bertha — Roland vinyl cutter</option>
+        <option value="sublimation">Sublimation</option>
+        <option value="xtool">XTool DTF (coming soon)</option>
+        <option value="hat_badge">Hat Badge / Press-on — order from Stalls</option>
+        <option value="other">Other / To be confirmed</option>
+      </select>
+      <div id="stallsRow" style="margin-top:8px;display:none;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;">
+          <input type="checkbox" id="stallsNeeded" style="width:16px;height:16px;accent-color:var(--accent);">
+          <span>Prints need to be ordered from <strong>Stalls</strong></span>
+        </label>
+        <label id="stallsOrderedRow" style="display:none;margin-top:6px;margin-left:24px;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;">
+          <input type="checkbox" id="stallsOrdered" style="width:16px;height:16px;accent-color:var(--accent2);">
+          <span style="color:var(--muted);">Stalls order has been placed ✓</span>
+        </label>
+      </div>
+    </div>
+
     <button class="order-btn" id="orderBtn" disabled onclick="placeOrder()">Order This →</button>
     <div class="note">You'll be taken to our store to complete your order. Custom requests are confirmed by Outpost team within 24 hrs.</div>
+    <button id="pickupInvoiceBtn" onclick="printPickupInvoice(localStorage.getItem('oo_last_order_num'))"
+      style="display:none;width:100%;margin-top:8px;padding:9px;background:transparent;
+      border:1.5px solid var(--border);color:var(--muted);border-radius:8px;
+      font-size:0.8rem;font-family:inherit;font-weight:600;cursor:pointer;">
+      🖨️ Print Pickup Invoice
+    </button>
 
     <!-- Inquiry section -->
     <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px;">
@@ -841,7 +873,11 @@ function updateSummary(d,g,c){
 
 function updateBtn(){
   const hasLogo = state.design || state.uploadedLogoSrc || Object.keys(state.zones).length > 0;
-  orderBtn.disabled = !(hasLogo && state.garment && state.colour);
+  const ready = !!(hasLogo && state.garment && state.colour);
+  orderBtn.disabled = !ready;
+  // Show print type panel when order is ready
+  const ptWrap = document.getElementById('printTypeWrap');
+  if(ptWrap) ptWrap.style.display = ready ? 'block' : 'none';
 }
 
 function toggleInquiryForm(){
@@ -905,9 +941,54 @@ async function submitInquiry(){
   }, 3000);
 }
 
+// ── Order number generator ────────────────────────────────────────────────────
+function generateOrderNumber(){
+  const d = new Date();
+  const ymd = d.getFullYear().toString() +
+    String(d.getMonth()+1).padStart(2,'0') +
+    String(d.getDate()).padStart(2,'0');
+  const key = 'oo_order_seq_' + ymd;
+  let seq = parseInt(localStorage.getItem(key)||'0') + 1;
+  try{ localStorage.setItem(key, seq); }catch(e){}
+  return 'OO-' + ymd + '-' + String(seq).padStart(3,'0');
+}
+
+// ── Print type helpers ────────────────────────────────────────────────────────
+const PRINT_TYPE_LABELS = {
+  dtf:        'DTF — in-house',
+  bertha:     'Bertha (Roland vinyl)',
+  sublimation:'Sublimation',
+  xtool:      'XTool DTF',
+  hat_badge:  'Hat Badge / Press-on (Stalls)',
+  other:      'TBC'
+};
+
+function getPrintInfo(){
+  const sel  = document.getElementById('printTypeSelect');
+  const type = sel ? sel.value : '';
+  const stallsNeeded  = document.getElementById('stallsNeeded')?.checked || false;
+  const stallsOrdered = document.getElementById('stallsOrdered')?.checked || false;
+  return { type, label: PRINT_TYPE_LABELS[type] || type || 'Not specified', stallsNeeded, stallsOrdered };
+}
+
+function getZoneSummary(){
+  const ZONE_NAMES = { chest:'Chest / Front', back:'Back', left_sleeve:'Left Sleeve', right_sleeve:'Right Sleeve' };
+  return Object.entries(state.zones).map(([k,v]) => {
+    const loc = ZONE_NAMES[k] || k;
+    const content = v.type === 'text' ? `"${v.text}"` : 'Logo';
+    return { loc, content };
+  });
+}
+
 function placeOrder(){
   const g = GARMENTS.find(x=>x.id===state.garment);
   const c = COLOURS.find(x=>x.id===state.colour);
+  if(!g || !c) return;
+
+  const orderNum = generateOrderNumber();
+  // Persist the last order number so the job sheet can retrieve it
+  try{ localStorage.setItem('oo_last_order_num', orderNum); }catch(e){}
+
   let logoDesc;
   if(state.uploadedLogoSrc){
     logoDesc = `Custom logo upload: ${state.customLogoName || 'uploaded file'}`;
@@ -917,8 +998,206 @@ function placeOrder(){
   }
   const zoneDescs = Object.entries(state.zones).map(([k,v]) => `${k}:${v.type==='text'?v.text:'logo'}`);
   if(zoneDescs.length) logoDesc += ` | Zones: ${zoneDescs.join(', ')}`;
-  const msg = encodeURIComponent(`Custom order: ${logoDesc} on ${c.name} ${g.name}`);
+  const msg = encodeURIComponent(`[${orderNum}] Custom order: ${logoDesc} on ${c.name} ${g.name}`);
   window.open(`https://okanagan-outpost.square.site?note=${msg}`, '_blank');
+
+  // Show pickup invoice button
+  try{
+    const pib = document.getElementById('pickupInvoiceBtn');
+    if(pib) pib.style.display = 'block';
+  }catch(e){}
+
+  // Show job sheet print prompt
+  setTimeout(()=>{
+    if(confirm(`Order ${orderNum} submitted!\n\nPrint the Job Sheet now to attach to this order?`)){
+      printJobSheet(orderNum);
+    }
+  }, 800);
+}
+
+// ── Job Sheet (travels with the order through production) ─────────────────────
+function printJobSheet(orderNum){
+  const g = GARMENTS.find(x=>x.id===state.garment);
+  const c = COLOURS.find(x=>x.id===state.colour);
+  const d = DESIGNS.find(x=>x.id===state.design);
+  const print = getPrintInfo();
+  const zones = getZoneSummary();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+
+  const placementRows = zones.length ? zones.map(z=>
+    `<tr><td style="padding:6px 10px;border-bottom:1px solid #ddd;color:#555;font-size:13px;">${z.loc}</td>
+     <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:13px;font-weight:600;">${z.content}</td></tr>`
+  ).join('') : `<tr><td colspan="2" style="padding:6px 10px;color:#888;font-size:13px;">No placement zones configured</td></tr>`;
+
+  const stallsBadge = print.stallsNeeded
+    ? `<span style="background:#fff3cd;border:1.5px solid #f0ad4e;color:#7a5000;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;">
+        ⚠️ STALLS ORDER ${print.stallsOrdered ? '✓ PLACED' : '— NOT YET PLACED'}
+       </span>`
+    : `<span style="background:#d4edda;border:1.5px solid #28a745;color:#155724;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;">✓ IN-HOUSE</span>`;
+
+  const logoThumb = state.uploadedLogoSrc
+    ? `<img src="${state.uploadedLogoSrc}" style="max-height:80px;max-width:160px;object-fit:contain;border:1px solid #ddd;border-radius:6px;padding:4px;">`
+    : (d ? `<img src="designs/${d.src}" style="max-height:80px;max-width:160px;object-fit:contain;border:1px solid #ddd;border-radius:6px;padding:4px;">` : '<span style="color:#aaa;font-size:12px;">No logo on file</span>');
+
+  const garmentThumb = (g && c && c.photo)
+    ? `<img src="garments/${c.photo}" style="max-height:100px;max-width:80px;object-fit:contain;">`
+    : '';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Job Sheet ${orderNum}</title>
+  <style>
+    @media print { @page { margin: 15mm; } body { margin: 0; } .no-print { display: none !important; } }
+    body { font-family: Arial, sans-serif; font-size: 14px; color: #1a1a1a; background: white; max-width: 750px; margin: 0 auto; padding: 20px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #5c3d2e; padding-bottom: 12px; margin-bottom: 16px; }
+    .shop-name { font-size: 22px; font-weight: 900; color: #5c3d2e; letter-spacing: -0.5px; }
+    .shop-sub { font-size: 11px; color: #888; margin-top: 2px; }
+    .order-num { font-size: 28px; font-weight: 900; color: #5c3d2e; text-align: right; }
+    .order-label { font-size: 10px; color: #888; text-align: right; text-transform: uppercase; letter-spacing: 0.05em; }
+    .badge { display: inline-block; background: #f3ede6; border: 2px solid #5c3d2e; color: #5c3d2e; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px 14px; }
+    .card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 6px; }
+    .card-val { font-size: 15px; font-weight: 700; }
+    .card-sub { font-size: 12px; color: #666; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f5f0eb; text-align: left; padding: 7px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
+    .notes-box { border: 1.5px dashed #ccc; border-radius: 8px; padding: 10px 14px; min-height: 80px; margin-top: 14px; }
+    .notes-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #aaa; margin-bottom: 4px; }
+    .footer { margin-top: 14px; padding-top: 10px; border-top: 1px solid #eee; font-size: 11px; color: #aaa; display: flex; justify-content: space-between; }
+  </style></head><body>
+  <div class="header">
+    <div>
+      <div class="shop-name">🏔 Okanagan Outpost</div>
+      <div class="shop-sub">Lumby, BC · (778) 473-2999</div>
+      <div style="margin-top:10px;">${stallsBadge}</div>
+    </div>
+    <div>
+      <div class="order-label">Job Sheet</div>
+      <div class="order-num">${orderNum}</div>
+      <div style="font-size:11px;color:#aaa;text-align:right;margin-top:2px;">${dateStr}</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">Garment</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        ${garmentThumb}
+        <div>
+          <div class="card-val">${g ? g.name : '—'}</div>
+          <div class="card-sub">${c ? c.name : '—'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Print Method</div>
+      <div class="card-val">${print.label}</div>
+      <div class="card-sub" style="margin-top:6px;">${logoThumb}</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-title">Placement</div>
+    <table><thead><tr><th>Location</th><th>Content</th></tr></thead><tbody>${placementRows}</tbody></table>
+  </div>
+
+  <div class="notes-box">
+    <div class="notes-title">Staff Notes / Production Checklist</div>
+    <div style="height:70px;"></div>
+  </div>
+
+  <div class="footer">
+    <span>Printed: ${dateStr}</span>
+    <span class="no-print"><button onclick="window.print()" style="padding:6px 18px;background:#5c3d2e;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;">🖨 Print This Sheet</button></span>
+    <span>Order: ${orderNum}</span>
+  </div>
+  <script>window.onload=()=>window.print();<\/script>
+  </body></html>`;
+
+  const w = window.open('','_blank');
+  if(w){ w.document.write(html); w.document.close(); }
+}
+
+// ── Completion / Pickup Invoice ───────────────────────────────────────────────
+function printPickupInvoice(orderNum){
+  orderNum = orderNum || localStorage.getItem('oo_last_order_num') || 'OO-UNKNOWN';
+  const g = GARMENTS.find(x=>x.id===state.garment);
+  const c = COLOURS.find(x=>x.id===state.colour);
+  const d = DESIGNS.find(x=>x.id===state.design);
+  const print = getPrintInfo();
+  const zones = getZoneSummary();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+
+  const zoneList = zones.length
+    ? zones.map(z=>`<li>${z.loc}: <strong>${z.content}</strong></li>`).join('')
+    : '<li style="color:#aaa;">No placement details on file</li>';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Pickup Invoice ${orderNum}</title>
+  <style>
+    @media print { @page { margin: 18mm; } body { margin: 0; } .no-print { display: none !important; } }
+    body { font-family: Arial, sans-serif; font-size: 14px; color: #1a1a1a; background: white; max-width: 680px; margin: 0 auto; padding: 30px 20px; }
+    .header { text-align: center; border-bottom: 3px solid #5c3d2e; padding-bottom: 16px; margin-bottom: 20px; }
+    .shop-name { font-size: 26px; font-weight: 900; color: #5c3d2e; letter-spacing: -0.5px; }
+    .shop-info { font-size: 12px; color: #888; margin-top: 4px; }
+    .invoice-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: #888; margin-top: 10px; }
+    .order-num { font-size: 32px; font-weight: 900; color: #5c3d2e; margin: 4px 0; }
+    .row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f0ebe3; font-size: 14px; }
+    .row-label { color: #666; }
+    .row-val { font-weight: 600; text-align: right; }
+    ul { margin: 6px 0 0 16px; padding: 0; font-size: 13px; }
+    li { padding: 3px 0; }
+    .status-box { margin: 20px 0; border: 2px solid #5c3d2e; border-radius: 10px; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; }
+    .status-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #888; }
+    .status-val { font-size: 16px; font-weight: 700; color: #5c3d2e; }
+    .balance-line { font-size: 22px; font-weight: 900; }
+    .thankyou { text-align: center; margin-top: 24px; font-size: 13px; color: #aaa; }
+    .footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #eee; font-size: 11px; color: #aaa; display: flex; justify-content: space-between; }
+  </style></head><body>
+  <div class="header">
+    <div class="shop-name">🏔 Okanagan Outpost</div>
+    <div class="shop-info">Lumby, BC · (778) 473-2999</div>
+    <div class="invoice-title">Pickup Invoice / Order Summary</div>
+    <div class="order-num">${orderNum}</div>
+    <div style="font-size:12px;color:#aaa;">${dateStr}</div>
+  </div>
+
+  <div class="row"><span class="row-label">Garment</span><span class="row-val">${g ? g.name : '—'}</span></div>
+  <div class="row"><span class="row-label">Colour</span><span class="row-val">${c ? c.name : '—'}</span></div>
+  <div class="row"><span class="row-label">Print Method</span><span class="row-val">${print.label}</span></div>
+  <div class="row">
+    <span class="row-label">Logo / Print Placement</span>
+    <span class="row-val"><ul>${zoneList}</ul></span>
+  </div>
+
+  <div class="status-box">
+    <div>
+      <div class="status-label">Payment Status</div>
+      <div class="status-val">Paid &nbsp;☐ &nbsp;&nbsp; Balance Owing &nbsp;☐</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="status-label">Amount</div>
+      <div class="balance-line">$_______</div>
+    </div>
+  </div>
+
+  <div class="thankyou">
+    Thank you for your order!<br>
+    <span style="font-size:12px;">Questions? Call or text us at (778) 473-2999</span>
+  </div>
+
+  <div class="footer">
+    <span>Printed: ${dateStr}</span>
+    <span class="no-print"><button onclick="window.print()" style="padding:6px 18px;background:#5c3d2e;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;">🖨 Print This Sheet</button></span>
+    <span>Order: ${orderNum}</span>
+  </div>
+  <script>window.onload=()=>window.print();<\/script>
+  </body></html>`;
+
+  const w = window.open('','_blank');
+  if(w){ w.document.write(html); w.document.close(); }
 }
 
 window.addEventListener('resize', () => {
@@ -929,6 +1208,14 @@ window.addEventListener('resize', () => {
 (function(){
   restoreState();
   applyDefaults(); // ensure garment+colour always set (Hoodie + Sport Grey for fresh visits)
+
+  // Show pickup invoice button if a previous order exists
+  try{
+    if(localStorage.getItem('oo_last_order_num')){
+      const pib = document.getElementById('pickupInvoiceBtn');
+      if(pib) pib.style.display = 'block';
+    }
+  }catch(e){}
 
   // Always highlight the active garment button
   if(state.garment){
@@ -1608,6 +1895,27 @@ zoneScaleSlider.addEventListener('input', () => {
   if(opposite && state.zones[opposite]) state.zones[opposite].scale = newScale;
   renderPreview();
 });
+
+// ── Print type dropdown wiring ────────────────────────────────────────────────
+(function(){
+  const sel = document.getElementById('printTypeSelect');
+  const stallsRow = document.getElementById('stallsRow');
+  const stallsNeeded = document.getElementById('stallsNeeded');
+  const stallsOrderedRow = document.getElementById('stallsOrderedRow');
+  if(!sel) return;
+
+  const STALLS_TYPES = ['dtf','hat_badge']; // types that may need Stalls
+
+  sel.addEventListener('change', ()=>{
+    const needs = STALLS_TYPES.includes(sel.value);
+    if(stallsRow) stallsRow.style.display = needs ? 'block' : 'none';
+    if(!needs && stallsNeeded) stallsNeeded.checked = false;
+  });
+
+  if(stallsNeeded) stallsNeeded.addEventListener('change', ()=>{
+    if(stallsOrderedRow) stallsOrderedRow.style.display = stallsNeeded.checked ? 'flex' : 'none';
+  });
+})();
 
 // ── Drag to reposition overlay ────────────────────────────────────────────────
 let _drag = null; // {startX, startY, startOX, startOY, target: 'main'|zoneKey}
