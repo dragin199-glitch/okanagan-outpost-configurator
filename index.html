@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Design Your Own – Okanagan Outpost</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@300;400;500;600&family=Oswald:wght@700&family=Bebas+Neue&family=Permanent+Marker&family=Russo+One&family=Montserrat:wght@800&family=Lobster&family=Roboto+Condensed:wght@700&family=Special+Elite&display=swap">
 <style>
@@ -206,7 +207,8 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
     </div>
     <div class="step">
       <div class="step-header"><div class="step-num">2</div><h2>Choose Garment Type</h2></div>
-      <div class="step-body"><div class="garment-grid" id="garmentGrid"></div></div>
+      <div class="step-body"><div class="garment-grid" id="garmentGrid"></div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-top:8px;">More garments (tees, tanks, zip hoodies) coming soon.</div></div>
     </div>
     <div class="step">
       <div class="step-header"><div class="step-num">3</div><h2>Choose Colour</h2></div>
@@ -400,6 +402,7 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
       </div>
     </div>
 
+    <div id="priceLine" style="display:none;text-align:center;font-weight:700;font-size:1.05rem;margin:0 0 10px;"></div>
     <button class="order-btn" id="orderBtn" disabled onclick="placeOrder()">Order This →</button>
     <div class="note">You'll be taken to our store to complete your order. Custom requests are confirmed by Outpost team within 24 hrs.</div>
     <button id="pickupInvoiceBtn" onclick="printPickupInvoice(localStorage.getItem('oo_last_order_num'))"
@@ -498,7 +501,9 @@ function restoreState(){
     const raw = localStorage.getItem('oo_state');
     if(!raw) return false;
     const saved = JSON.parse(raw);
-    if(saved.garment) state.garment = saved.garment;
+    // Ignore a saved garment that is no longer offered (e.g. tees before they launch)
+    const savedG = GARMENTS.find(g => g.id === saved.garment);
+    if(savedG && savedG.available) state.garment = saved.garment;
     if(saved.colour)  state.colour  = saved.colour;
     if(saved.design)  state.design  = saved.design;
     if(saved.logoOffset) state.logoOffset = saved.logoOffset;
@@ -583,12 +588,14 @@ const DESIGNS = [
 ];
 
 
+// available:false hides a garment from customers until it has Square listings and a price.
+// price is in CAD dollars. To launch another garment, set available:true and give it a price.
 const GARMENTS = [
-  {id:"pullover_hoodie", name:"Pullover Hoodie", label:"Hoodie"},
-  {id:"zip_hoodie",      name:"Zip Hoodie",      label:"Zip"},
-  {id:"crew_tee",        name:"Crew Neck Tee",   label:"Crew Tee"},
-  {id:"vneck_tee",       name:"V-Neck Tee",      label:"V-Neck"},
-  {id:"tank_top",        name:"Tank Top",         label:"Tank"},
+  {id:"pullover_hoodie", name:"Pullover Hoodie", label:"Hoodie",   available:true,  price:65.00},
+  {id:"zip_hoodie",      name:"Zip Hoodie",      label:"Zip",      available:false, price:null},
+  {id:"crew_tee",        name:"Crew Neck Tee",   label:"Crew Tee", available:false, price:null},
+  {id:"vneck_tee",       name:"V-Neck Tee",      label:"V-Neck",   available:false, price:null},
+  {id:"tank_top",        name:"Tank Top",        label:"Tank",     available:false, price:null},
 ];
 
 // Colours offered to customers. Every entry has its own real garment photo in garments/
@@ -652,7 +659,7 @@ DESIGNS.forEach(d => {
 });
 
 // Render garment grid
-GARMENTS.forEach(g => {
+GARMENTS.filter(g => g.available).forEach(g => {
   const el = document.createElement('div');
   el.className = 'garment-btn';
   el.dataset.id = g.id;
@@ -852,6 +859,17 @@ function updateBtn(){
   const hasLogo = state.design || state.uploadedLogoSrc || Object.keys(state.zones).length > 0;
   const ready = !!(hasLogo && state.garment && state.colour);
   orderBtn.disabled = !ready;
+  // Price line (garment price in CAD; extra print areas are quoted by the shop)
+  const pl = document.getElementById('priceLine');
+  if(pl){
+    const pg = GARMENTS.find(x=>x.id===state.garment);
+    if(pg && pg.price != null){
+      pl.textContent = `${pg.name} · from $${pg.price.toFixed(2)} CAD`;
+      pl.style.display = 'block';
+    } else {
+      pl.style.display = 'none';
+    }
+  }
   // Show print type panel when order is ready
   const ptWrap = document.getElementById('printTypeWrap');
   if(ptWrap) ptWrap.style.display = ready ? 'block' : 'none';
