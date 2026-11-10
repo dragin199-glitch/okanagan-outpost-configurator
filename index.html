@@ -68,6 +68,7 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 .preview-panel{background:var(--canvas-bg);border-left:1px solid var(--border);
   display:flex;flex-direction:column;align-items:center;padding:24px 16px;gap:16px;
   position:sticky;top:0;height:calc(100vh - 57px);overflow-y:auto;}
+.preview-panel>*{flex-shrink:0;}
 @media(max-width:720px){.preview-panel{position:static;height:auto;}}
 .preview-title{font-family:'Playfair Display',serif;font-size:1rem;color:var(--accent);text-align:center;}
 
@@ -884,11 +885,16 @@ function updateSummary(d,g,c){
   t += '</strong>';
   const zoneCount = Object.keys(state.zones).length;
   if(zoneCount > 0){
-    t += `<br><span style="font-size:0.72rem;color:var(--muted);">+ ${zoneCount} extra print zone${zoneCount>1?'s':''}</span>`;
+    const ZN = {left_chest:'Left Chest',name_tag:'Name Tag',back:'Full Back',left_sleeve:'Left Sleeve',right_sleeve:'Right Sleeve'};
+    t += `<br><span style="font-size:0.72rem;color:var(--muted);">+ ${zoneCount} extra print zone${zoneCount>1?'s':''}:</span>`;
+    Object.keys(state.zones).forEach(k => {
+      t += `<div style="font-size:0.78rem;margin-top:3px;">${ZN[k]||k} <button type="button" onclick="removeZone('${k}')" style="margin-left:6px;background:transparent;border:1px solid var(--border);color:inherit;border-radius:6px;padding:1px 8px;font:inherit;font-size:0.72rem;cursor:pointer;">✕ Remove</button></div>`;
+    });
   }
   summary.innerHTML = t;
 }
 
+const STAFF_MODE = /[?&]staff=1\b/.test(location.search);
 const TAX_PROVS = ['BC','AB','YT','NT','NU'];
 function fulfilment(){
   const r = document.querySelector('input[name="fulfill"]:checked');
@@ -918,9 +924,9 @@ function updateBtn(){
       pl.style.display = 'none';
     }
   }
-  // Show print type panel when order is ready
+  // Print method is decided by the shop (default DTF, set below). Staff can see/change it with ?staff=1 in the URL.
   const ptWrap = document.getElementById('printTypeWrap');
-  if(ptWrap) ptWrap.style.display = ready ? 'block' : 'none';
+  if(ptWrap) ptWrap.style.display = (ready && STAFF_MODE) ? 'block' : 'none';
 }
 
 function toggleInquiryForm(){
@@ -1867,6 +1873,15 @@ function applyZoneText(){
 // alias so existing calls still work
 function applyTextLogo(){ applyZoneText(); }
 
+function removeZone(key){
+  delete state.zones[key];
+  if(key === selectedPlacement){
+    document.getElementById('zoneUploadPreviewRow').style.display = 'none';
+    document.getElementById('zoneUploadZone').style.display = '';
+  }
+  renderPreview();
+}
+
 function clearCurrentZone(){
   delete state.zones[selectedPlacement];
   document.getElementById('zoneUploadPreviewRow').style.display = 'none';
@@ -2051,6 +2066,7 @@ zoneScaleSlider.addEventListener('input', () => {
   const stallsNeeded = document.getElementById('stallsNeeded');
   const stallsOrderedRow = document.getElementById('stallsOrderedRow');
   if(!sel) return;
+  sel.value = 'dtf';   // shop default for customer orders; customers are never asked
 
   const STALLS_TYPES = ['dtf','hat_badge']; // types that may need Stalls
 
