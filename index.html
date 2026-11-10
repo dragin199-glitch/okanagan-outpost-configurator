@@ -404,7 +404,7 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 
     <div id="priceLine" style="display:none;text-align:center;font-weight:700;font-size:1.05rem;margin:0 0 10px;"></div>
     <button class="order-btn" id="orderBtn" disabled onclick="placeOrder()">Order This →</button>
-    <div class="note">You'll be taken to our store to complete your order. Custom requests are confirmed by Outpost team within 24 hrs.</div>
+    <div class="note">You'll continue to secure checkout (powered by Square). Custom requests are confirmed by the Outpost team within 24 hrs.</div>
     <button id="pickupInvoiceBtn" onclick="printPickupInvoice(localStorage.getItem('oo_last_order_num'))"
       style="display:none;width:100%;margin-top:8px;padding:9px;background:transparent;
       border:1.5px solid var(--border);color:var(--muted);border-radius:8px;
@@ -900,7 +900,7 @@ async function submitInquiry(){
   const c = COLOURS.find(x=>x.id===state.colour);
   const configSummary = (g && c) ? `${c.name} ${g.name}` : 'Not specified';
 
-  const payload = { name, contact, message, config: configSummary, ts: new Date().toISOString() };
+  const payload = { action: 'inquiry', name, contact, message, config: configSummary, ts: new Date().toISOString() };
 
   // Always save locally as a backup
   try{
@@ -914,8 +914,7 @@ async function submitInquiry(){
     try{
       await fetch(INQUIRY_ENDPOINT, {
         method: 'POST',
-        mode: 'no-cors', // Apps Script doesn't return CORS headers by default
-        headers: {'Content-Type':'application/json'},
+        mode: 'no-cors', // fire-and-forget: we don't need to read the reply
         body: JSON.stringify(payload)
       });
     }catch(e){
@@ -1018,44 +1017,93 @@ function getZoneSummary(){
   });
 }
 
-function placeOrder(){
+let orderInFlight = false;
+
+// Only ever send the customer to Square's own checkout pages
+function isSquareCheckoutUrl(u){
+  try{
+    const h = new URL(u).hostname;
+    return /(^|\.)square\.link$/.test(h) || /(^|\.)square\.site$/.test(h) || /(^|\.)squareup\.com$/.test(h);
+  }catch(e){ return false; }
+}
+
+function showOrderReady(orderNum, url){
+  ooDialog({
+    title: `Order ${orderNum} is ready`,
+    message: `Continue to secure checkout to pay. Your design details are saved with the order.\n\nPlease keep your order number: ${orderNum}`,
+    buttons: [
+      {label:'Continue to checkout', primary:true, value:'pay'},
+      {label:'Print Job Sheet', value:'sheet'}
+    ]
+  }).then(choice=>{
+    if(choice === 'sheet'){
+      printJobSheet(orderNum);
+      showOrderReady(orderNum, url);   // come back to the choice after printing
+    } else {
+      window.location.href = url;
+    }
+  });
+}
+
+async function placeOrder(){
+  if(orderInFlight) return;
   const g = GARMENTS.find(x=>x.id===state.garment);
   const c = COLOURS.find(x=>x.id===state.colour);
   if(!g || !c) return;
 
-  const orderNum = generateOrderNumber();
-  // Persist the last order number so the job sheet can retrieve it
-  try{ localStorage.setItem('oo_last_order_num', orderNum); }catch(e){}
-
-  let logoDesc;
-  if(state.uploadedLogoSrc){
-    logoDesc = `Custom logo upload: ${state.customLogoName || 'uploaded file'}`;
-  } else {
-    const d = DESIGNS.find(x=>x.id===state.design);
-    logoDesc = d ? d.name : 'No design';
-  }
-  const zoneDescs = Object.entries(state.zones).map(([k,v]) => `${k}:${v.type==='text'?v.text:'logo'}`);
-  if(zoneDescs.length) logoDesc += ` | Zones: ${zoneDescs.join(', ')}`;
-  const msg = encodeURIComponent(`[${orderNum}] Custom order: ${logoDesc} on ${c.name} ${g.name}`);
-  window.open(`https://okanagan-outpost.square.site?note=${msg}`, '_blank');
-
-  // Show pickup invoice button
-  try{
-    const pib = document.getElementById('pickupInvoiceBtn');
-    if(pib) pib.style.display = 'block';
-  }catch(e){}
-
-  // Show job sheet print prompt
-  setTimeout(()=>{
+  // Until the ordering backend is deployed, don't send customers to a store page with an empty cart
+  if(!INQUIRY_ENDPOINT || INQUIRY_ENDPOINT === 'YOUR_APPS_SCRIPT_URL_HERE'){
     ooDialog({
-      title: `Order ${orderNum} created`,
-      message: 'Print the Job Sheet now to attach to this order?',
-      buttons: [
-        {label:'Print Job Sheet', primary:true, value:true},
-        {label:'Not now', value:false}
-      ]
-    }).then(yes=>{ if(yes) printJobSheet(orderNum); });
-  }, 800);
+      title: 'Online ordering is almost ready',
+      message: 'Please call us at (778) 473-2999 or send us a message below and we will set up your order.'
+    });
+    return;
+  }
+
+  const d = DESIGNS.find(x=>x.id===state.design);
+  const payload = {
+    action: 'order',
+    garment: state.garment,
+    colour: state.colour,
+    designName: state.uploadedLogoSrc ? '' : (d ? d.name : ''),
+    logoName: state.uploadedLogoSrc ? (state.customLogoName || 'uploaded file') : '',
+    logoDataUrl: state.uploadedLogoSrc || '',
+    zones: getZoneSummary(),
+    website: ''                       // honeypot, must stay empty
+  };
+
+  orderInFlight = true;
+  const label = orderBtn.textContent;
+  orderBtn.disabled = true;
+  orderBtn.textContent = 'Creating your order…';
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), 45000);
+  try{
+    // text/plain keeps this a "simple" request so the browser doesn't need a CORS preflight
+    const res = await fetch(INQUIRY_ENDPOINT, {method:'POST', body: JSON.stringify(payload), signal: ctrl.signal});
+    const out = await res.json();
+    if(!out.ok || !out.url || !isSquareCheckoutUrl(out.url)){
+      throw new Error(out.error || 'Order failed');
+    }
+    try{ localStorage.setItem('oo_last_order_num', out.orderNumber); }catch(e){}
+    try{
+      const pib = document.getElementById('pickupInvoiceBtn');
+      if(pib) pib.style.display = 'block';
+    }catch(e){}
+    showOrderReady(out.orderNumber, out.url);
+  }catch(err){
+    ooDialog({
+      title: 'We could not start your order',
+      message: (err && err.message && err.message !== 'Order failed' && err.message.length < 160 && !/fetch|network|abort/i.test(err.message))
+        ? err.message
+        : 'Something went wrong on our end. Please try again, or call us at (778) 473-2999.'
+    });
+  }finally{
+    clearTimeout(timer);
+    orderInFlight = false;
+    orderBtn.textContent = label;
+    updateBtn();
+  }
 }
 
 // ── Job Sheet (travels with the order through production) ─────────────────────
