@@ -402,9 +402,30 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
       </div>
     </div>
 
+    <div id="fulfillWrap" style="margin:0 0 10px;">
+      <div style="font-size:0.8rem;font-weight:700;margin-bottom:6px;">How do you want to get it?</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;margin-bottom:4px;cursor:pointer;">
+        <input type="radio" name="fulfill" value="pickup" checked onchange="updateBtn()"> Pick up in store (Lumby)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;cursor:pointer;">
+        <input type="radio" name="fulfill" value="ship" onchange="updateBtn()"> Ship to me
+      </label>
+      <div id="provWrap" style="display:none;margin-top:8px;">
+        <label for="provSel" style="font-size:0.8rem;font-weight:700;">Shipping province</label>
+        <select id="provSel" onchange="updateBtn()" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:inherit;font-family:inherit;">
+          <option value="">Choose province…</option>
+          <option value="BC">British Columbia</option>
+          <option value="AB">Alberta</option>
+          <option value="YT">Yukon</option>
+          <option value="NT">Northwest Territories</option>
+          <option value="NU">Nunavut</option>
+          <option value="OTHER">Other province (call us)</option>
+        </select>
+      </div>
+    </div>
     <div id="priceLine" style="display:none;text-align:center;font-weight:700;font-size:1.05rem;margin:0 0 10px;"></div>
     <button class="order-btn" id="orderBtn" disabled onclick="placeOrder()">Order This →</button>
-    <div class="note">You'll continue to secure checkout (powered by Square). Custom requests are confirmed by the Outpost team within 24 hrs.</div>
+    <div class="note">You'll continue to secure checkout (powered by Square); GST/PST are added there. Custom requests are confirmed by the Outpost team within 24 hrs.</div>
     <button id="pickupInvoiceBtn" onclick="printPickupInvoice(localStorage.getItem('oo_last_order_num'))"
       style="display:none;width:100%;margin-top:8px;padding:9px;background:transparent;
       border:1.5px solid var(--border);color:var(--muted);border-radius:8px;
@@ -855,7 +876,18 @@ function updateSummary(d,g,c){
   summary.innerHTML = t;
 }
 
+const TAX_PROVS = ['BC','AB','YT','NT','NU'];
+function fulfilment(){
+  const r = document.querySelector('input[name="fulfill"]:checked');
+  const mode = r ? r.value : 'pickup';
+  const sel = document.getElementById('provSel');
+  return { mode, province: mode==='ship' ? (sel ? sel.value : '') : 'BC' };
+}
+
 function updateBtn(){
+  const fvw = fulfilment();
+  const pw = document.getElementById('provWrap');
+  if(pw) pw.style.display = fvw.mode==='ship' ? 'block' : 'none';
   const hasLogo = state.design || state.uploadedLogoSrc || Object.keys(state.zones).length > 0;
   const ready = !!(hasLogo && state.garment && state.colour);
   orderBtn.disabled = !ready;
@@ -864,7 +896,10 @@ function updateBtn(){
   if(pl){
     const pg = GARMENTS.find(x=>x.id===state.garment);
     if(pg && pg.price != null){
-      pl.textContent = `${pg.name} · from $${pg.price.toFixed(2)} CAD`;
+      const fv = fulfilment();
+      const rate = fv.province==='BC' ? 0.12 : (TAX_PROVS.includes(fv.province) ? 0.05 : null);
+      const taxTxt = rate==null ? ' + tax' : ` + ${fv.province==='BC'?'GST/PST':'GST'} = $${(pg.price*(1+rate)).toFixed(2)}`;
+      pl.textContent = `${pg.name} · from $${pg.price.toFixed(2)}${taxTxt} CAD`;
       pl.style.display = 'block';
     } else {
       pl.style.display = 'none';
@@ -1060,9 +1095,20 @@ async function placeOrder(){
     return;
   }
 
+  const fv = fulfilment();
+  if(fv.mode==='ship' && !fv.province){
+    ooDialog({ title: 'Choose your province', message: 'Pick the province you want it shipped to so we can work out tax.' });
+    return;
+  }
+  if(fv.mode==='ship' && !TAX_PROVS.includes(fv.province)){
+    ooDialog({ title: 'Call us for that province', message: 'We can’t take online orders for that province yet. Please call (778) 473-2999 and we’ll set it up for you.' });
+    return;
+  }
   const d = DESIGNS.find(x=>x.id===state.design);
   const payload = {
     action: 'order',
+    fulfillment: fv.mode,
+    province: fv.province,
     garment: state.garment,
     colour: state.colour,
     designName: state.uploadedLogoSrc ? '' : (d ? d.name : ''),
