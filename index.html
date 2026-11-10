@@ -196,6 +196,7 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
     <div class="header-logo">Okanagan Outpost</div>
     <div class="header-sub">Custom Apparel Configurator</div>
   </div>
+  <button type="button" onclick="startOver()" style="background:transparent;border:1.5px solid currentColor;color:inherit;border-radius:8px;padding:5px 12px;font:inherit;font-size:0.8rem;font-weight:600;cursor:pointer;margin-right:10px;">↺ Start over</button>
   <a class="header-back" href="https://okanagan-outpost.square.site" target="_blank">← Back to Store</a>
 </div>
 
@@ -499,6 +500,15 @@ document.addEventListener('dragstart', e => {
 // logoScale: 1.0 = default size, user-adjustable
 let state = {design:null,garment:null,colour:null,customLogo:null,customLogoName:null,customText:null,customPlacement:null,logoOffset:{x:0,y:0},logoScale:1.0,uploadedLogoSrc:null,_textSrc:null,zones:{},_zoneRotations:{}};
 
+// Declared up here: the restore step below calls renderPreview() before the rest of the script has run.
+let _rawLogoDataUrl = null;      // original upload before any background removal
+let selectedPlacement = 'left_chest';
+
+function startOver(){
+  try{ localStorage.removeItem('oo_state'); }catch(e){}
+  location.reload();
+}
+
 function saveState(){
   try{
     const toSave = {
@@ -670,6 +680,9 @@ DESIGNS.forEach(d => {
     el.classList.add('selected');
     state.design = d.id;
     state.customLogo = null; state.customText = null; state.customLogoName = null;
+    state.uploadedLogoSrc = null; state._textSrc = null; _rawLogoDataUrl = null;   // an uploaded logo must not override a chosen design
+    state.logoOffset = {x:0, y:0}; state.logoScale = 1.0;
+    const _ss = document.getElementById('logoScaleSlider'); if(_ss) _ss.value = 100;
     uploadPrevRow.style.display = 'none';
     uploadZone.style.display = '';
     document.getElementById('bgWarnBanner').hidden = true;
@@ -1378,7 +1391,7 @@ window.addEventListener('resize', () => {
   if(state.uploadedLogoSrc){
     const uRow = document.getElementById('uploadPreviewRow');
     const uZone = document.getElementById('uploadZone');
-    const uImg  = document.getElementById('uploadPreview');
+    const uImg  = document.getElementById('uploadThumb');
     const uName = document.getElementById('uploadName');
     if(uRow)  uRow.style.display  = '';
     if(uZone) uZone.style.display = 'none';
@@ -1432,7 +1445,6 @@ logoUpload.addEventListener('change', () => {
 });
 
 // ── Background detection & removal ──────────────────────────────────────────
-let _rawLogoDataUrl = null; // original before any bg removal
 
 function colourDistance(a, b){
   return Math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2);
@@ -1728,7 +1740,6 @@ const FONTS = [
   {id:'elite',     label:'Special Elite',     css:"'Special Elite', cursive",    weight:'400'},
 ];
 let selectedFont = FONTS[0];
-let selectedPlacement = 'left_chest';
 let _activeZoneType = 'text';
 
 const fontPickerEl = document.getElementById('fontPicker');
