@@ -557,17 +557,17 @@ function hideAllZoneEls(){
 const DESIGNS = [
   {id:"lumby_sunset",name:"Lumby Lifestyle Sunset",multicolour:true,src:"designs/lumby_sunset.png"},
   {id:"straight_outta",name:"Straight Outta Lumby",src:"designs/straight_outta.png"},
-  {id:"what_happens",name:"What Happens in Lumby",src:"designs/what_happens.png"},
+  {id:"what_happens",name:"Whatever Happens in Lumby",src:"designs/what_happens.png"},
   {id:"bear_hoodie",name:"Lumby Bear (Canva)",multicolour:true,src:"designs/bear_hoodie.png"},
-  {id:"explore_more",name:"Explore More – Okanagan",multicolour:true,src:"designs/explore_more.png"},
-  {id:"lumby_arrow",name:"Lumby Arrow Logo",src:"designs/lumby_arrow.png"},
-  {id:"lumby_arrow_wood",name:"Arrow (Wood Grain)",multicolour:true,src:"designs/lumby_arrow_wood.png"},
-  {id:"lumby_bear",name:"Lumby BC Bear",multicolour:true,src:"designs/lumby_bear.png"},
-  {id:"lumby_car",name:"Lumby Car & Mountain",src:"designs/lumby_car.png"},
-  {id:"lumby_eagle",name:"Lumby Eagle",multicolour:true,src:"designs/lumby_eagle.png"},
+  {id:"explore_more",name:"Explore More Okanagan",multicolour:true,src:"designs/explore_more.png"},
+  {id:"lumby_arrow",name:"Lumby Lifestyle Arrows",src:"designs/lumby_arrow.png"},
+  {id:"lumby_arrow_wood",name:"Lumby Lifestyle Arrows Wood Grain",multicolour:true,src:"designs/lumby_arrow_wood.png"},
+  {id:"lumby_bear",name:"Lumby BC Colour Bear",multicolour:true,src:"designs/lumby_bear.png"},
+  {id:"lumby_car",name:"Lumby Lifestyle Classic Car",src:"designs/lumby_car.png"},
+  {id:"lumby_eagle",name:"Lumby Lifestyle Eagle",multicolour:true,src:"designs/lumby_eagle.png"},
   {id:"lumby_elk",name:"Lumby Elk",multicolour:true,src:"designs/lumby_elk.png"},
-  {id:"flower_bear",name:"Flower Bear",multicolour:true,src:"designs/flower_bear.png"},
-  {id:"mountain_bear",name:"Mountain Bear",src:"designs/mountain_bear.png"},
+  {id:"flower_bear",name:"Lumby Lifestyle Flower Bear",multicolour:true,src:"designs/flower_bear.png"},
+  {id:"mountain_bear",name:"Lumby Lifestyle Mountain Bear",src:"designs/mountain_bear.png"},
 {id:"straight_outta_vernon",name:"Straight Outta Vernon",multicolour:true,src:"designs/straight_outta_vernon.png"},
 {id:"straight_outta_alberta",name:"Straight Outta Alberta",multicolour:true,src:"designs/straight_outta_alberta.png"},
 {id:"straight_outta_edmonton",name:"Straight Outta Edmonton",multicolour:true,src:"designs/straight_outta_edmonton.png"},
@@ -576,7 +576,7 @@ const DESIGNS = [
 {id:"straight_outta_gas",name:"Straight Outta Gas",multicolour:true,src:"designs/straight_outta_gas.png"},
 {id:"straight_outta_cherryville",name:"Straight Outta Cherryville",multicolour:true,src:"designs/straight_outta_cherryville.png"},
 {id:"straight_outta_love",name:"Straight Outta Love",multicolour:true,src:"designs/straight_outta_love.png"},
-{id:"straight_outta_okgn",name:"Straight Outta okgn",multicolour:true,src:"designs/straight_outta_okgn.png"},
+{id:"straight_outta_okgn",name:"Straight Outta OKGN",multicolour:true,src:"designs/straight_outta_okgn.png"},
 {id:"straight_outta_calgary",name:"Straight Outta Calgary",multicolour:true,src:"designs/straight_outta_calgary.png"},
 {id:"straight_outta_garage",name:"Straight Outta Garage",multicolour:true,src:"designs/straight_outta_garage.png"},
 {id:"straight_outta_your_text",name:"Straight Outta Your Text",multicolour:true,src:"designs/straight_outta_your_text.png"}
@@ -591,31 +591,8 @@ const GARMENTS = [
   {id:"tank_top",        name:"Tank Top",         label:"Tank"},
 ];
 
-// Available garment photos (from supplier flat-lays)
-// Maps colour id → filename in garments/ folder
-// Colours without an exact photo use the closest match
-const COLOUR_PHOTO = {
-  black:         "black_front.png",
-  white:         "white_front.png",
-  heather_grey:  "sport_grey.png",
-  navy:          "saphire_front.png",   // closest to navy
-  forest_green:  "forest_green.png",
-  royal_blue:    "royal_blue.png",
-  maroon:        "maroon_front.png",
-  sand:          "carmel.png",
-  red:           "sangria_front.png",
-  purple:        "military_green_f.png", // no purple photo yet — placeholder
-  gold:          "gold.png",
-  military_green:"military_green_f.png",
-  caramel:       "carmel.png",
-  sapphire:      "saphire_front.png",
-  sangria:       "sangria_front.png",
-  sport_grey:    "sport_grey.png",
-  dark_grey:     "dark_grey.png",
-  chocolate_brown:"chocolate_brown_f.png",
-  oatmeal:       "oatmeal_f.png",
-};
-
+// Colours offered to customers. Every entry has its own real garment photo in garments/
+// (the old COLOUR_PHOTO lookup with placeholder photos for purple/red/navy was unused and was removed).
 const COLOURS = [
   {id:"black",         name:"Black",         hex:"#1a1a1a", photo:"black_front.png",    dark:true},
   {id:"white",         name:"White",         hex:"#f0f0f0", photo:"white_front.png",    dark:false},
@@ -898,7 +875,7 @@ async function submitInquiry(){
   const contact = document.getElementById('iqContact').value.trim();
   const message = document.getElementById('iqMessage').value.trim();
   if(!name || !contact || !message){
-    alert('Please fill in all fields before sending.');
+    ooDialog({message:'Please fill in all fields before sending.'});
     return;
   }
   const g = GARMENTS.find(x=>x.id===state.garment);
@@ -950,7 +927,50 @@ function generateOrderNumber(){
   const key = 'oo_order_seq_' + ymd;
   let seq = parseInt(localStorage.getItem(key)||'0') + 1;
   try{ localStorage.setItem(key, seq); }catch(e){}
-  return 'OO-' + ymd + '-' + String(seq).padStart(3,'0');
+  // Short random suffix so two devices/browsers can't produce the same number on the same day
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let suffix = '';
+  for(let i=0;i<3;i++) suffix += alphabet[Math.floor(Math.random()*alphabet.length)];
+  return 'OO-' + ymd + '-' + String(seq).padStart(3,'0') + '-' + suffix;
+}
+
+// ── On-page dialog (replaces browser alert()/confirm() popups) ───────────────
+function ooDialog({title='', message='', buttons=[{label:'OK', primary:true, value:true}]}={}){
+  return new Promise(resolve=>{
+    const overlay = document.createElement('div');
+    overlay.setAttribute('role','dialog');
+    overlay.setAttribute('aria-modal','true');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;color:#222;border-radius:12px;max-width:420px;width:100%;padding:22px 22px 18px;box-shadow:0 10px 40px rgba(0,0,0,.35);font-family:inherit;';
+    if(title){
+      const h = document.createElement('div');
+      h.textContent = title;
+      h.style.cssText = 'font-size:18px;font-weight:700;margin-bottom:8px;';
+      box.appendChild(h);
+    }
+    const p = document.createElement('div');
+    p.textContent = message;
+    p.style.cssText = 'font-size:15px;line-height:1.45;margin-bottom:16px;white-space:pre-line;';
+    box.appendChild(p);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;';
+    const done = v => { overlay.remove(); resolve(v); };
+    buttons.forEach(b=>{
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = b.label;
+      btn.style.cssText = 'padding:10px 16px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;border:1.5px solid ' +
+        (b.primary ? '#1a1a1a;background:#1a1a1a;color:#fff;' : '#bbb;background:#fff;color:#222;');
+      btn.addEventListener('click', ()=>done(b.value));
+      row.appendChild(btn);
+    });
+    box.appendChild(row);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const first = row.querySelector('button');
+    if(first) first.focus();
+  });
 }
 
 // ── Print type helpers ────────────────────────────────────────────────────────
@@ -1009,9 +1029,14 @@ function placeOrder(){
 
   // Show job sheet print prompt
   setTimeout(()=>{
-    if(confirm(`Order ${orderNum} submitted!\n\nPrint the Job Sheet now to attach to this order?`)){
-      printJobSheet(orderNum);
-    }
+    ooDialog({
+      title: `Order ${orderNum} created`,
+      message: 'Print the Job Sheet now to attach to this order?',
+      buttons: [
+        {label:'Print Job Sheet', primary:true, value:true},
+        {label:'Not now', value:false}
+      ]
+    }).then(yes=>{ if(yes) printJobSheet(orderNum); });
   }, 800);
 }
 
@@ -1038,7 +1063,7 @@ function printJobSheet(orderNum){
 
   const logoThumb = state.uploadedLogoSrc
     ? `<img src="${state.uploadedLogoSrc}" style="max-height:80px;max-width:160px;object-fit:contain;border:1px solid #ddd;border-radius:6px;padding:4px;">`
-    : (d ? `<img src="designs/${d.src}" style="max-height:80px;max-width:160px;object-fit:contain;border:1px solid #ddd;border-radius:6px;padding:4px;">` : '<span style="color:#aaa;font-size:12px;">No logo on file</span>');
+    : (d ? `<img src="${d.src}" style="max-height:80px;max-width:160px;object-fit:contain;border:1px solid #ddd;border-radius:6px;padding:4px;">` : '<span style="color:#aaa;font-size:12px;">No logo on file</span>');
 
   const garmentThumb = (g && c && c.photo)
     ? `<img src="garments/${c.photo}" style="max-height:100px;max-width:80px;object-fit:contain;">`
